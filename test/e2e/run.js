@@ -47,6 +47,9 @@ async function step(name, fn) {
     await win.waitForSelector('.paste.filled');
     const pill = await win.$('text=Жирный, курсив и ссылки сохранены');
     assert(pill, 'нет отметки о сохранённом форматировании');
+    const foot = await win.$eval('#pasteFt', el => el.innerText);
+    assert(/5 абзацев/.test(foot), `абзацы склеились при вставке: ${foot}`);
+    assert(await win.$('#pasteArea b'), 'жирный не сохранился');
     await shot('01a-pasted');
   });
 

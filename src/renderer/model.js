@@ -85,6 +85,31 @@ const Model = (() => {
     return { paragraphs: parts.map(s => s.replace(/^\s+|\s+$/g, '')).filter(Boolean).map(s => ({ kind: 'p', runs: [{ text: s }] })), hadFormatting: false };
   }
 
+  // Clipboards differ by platform: on Windows the HTML flavour can lose paragraph boundaries.
+  // When the plain text has more paragraphs, take the structure from it and carry over bold/italic/links from the HTML.
+  function fromClipboard(html, text) {
+    const h = html ? fromHtml(html) : { paragraphs: [], hadFormatting: false };
+    const t = fromText(text || '');
+    if (!h.paragraphs.length) return t;
+    if (t.paragraphs.length <= h.paragraphs.length) return h;
+    const styled = [];
+    for (const p of h.paragraphs) for (const r of p.runs) if ((r.b || r.i || r.href) && r.text.trim()) styled.push(r);
+    let pi = 0, from = 0;
+    for (const r of styled) {
+      const needle = r.text.trim();
+      for (let k = pi; k < t.paragraphs.length; k++) {
+        const txt = textOf(t.paragraphs[k]);
+        const at = txt.indexOf(needle, k === pi ? from : 0);
+        if (at < 0) continue;
+        const p = t.paragraphs[k];
+        p.runs = normalizeRuns([...slices(p.runs, 0, at), ...slices(p.runs, at, at + needle.length).map(x => ({ ...x, ...pick(r) })), ...slices(p.runs, at + needle.length, txt.length)]);
+        pi = k; from = at + needle.length;
+        break;
+      }
+    }
+    return { paragraphs: t.paragraphs, hadFormatting: h.hadFormatting };
+  }
+
   // A short first line without a final period reads as a title — show it as the document heading.
   function detectTitle(paragraphs) {
     if (paragraphs.length > 1 && paragraphs[0].kind === 'p') {
@@ -280,5 +305,5 @@ const Model = (() => {
     return { chars, paragraphs: doc.paragraphs.filter(p => p.kind === 'p').length };
   }
 
-  return { NBSP, esc, textOf, normalizeRuns, clone, fromHtml, fromText, detectTitle, replaceRange, applyFixes, slices, paragraphHtml, runsFromElement, fixSegments, diffSegments, trackedParagraphs, cleanParagraphs, insertedRanges, stats };
+  return { NBSP, esc, textOf, normalizeRuns, clone, fromHtml, fromText, fromClipboard, detectTitle, replaceRange, applyFixes, slices, paragraphHtml, runsFromElement, fixSegments, diffSegments, trackedParagraphs, cleanParagraphs, insertedRanges, stats };
 })();

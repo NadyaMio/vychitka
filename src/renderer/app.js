@@ -175,8 +175,7 @@ function modelToHtml(paragraphs) {
   return paragraphs.map(p => { const inner = p.runs.map(r => { let h = esc(r.text).replace(/\n/g, '<br>'); if (r.b) h = `<b>${h}</b>`; if (r.i) h = `<i>${h}</i>`; if (r.href) h = `<a href="${esc(r.href)}">${h}</a>`; return h; }).join(''); return p.kind === 'h' ? `<h1>${inner}</h1>` : `<p>${inner}</p>`; }).join('');
 }
 function insertIntoStart(html, text) {
-  const m = html ? Model.fromHtml(html) : Model.fromText(text || '');
-  if (!m.paragraphs.length && text) Object.assign(m, Model.fromText(text));
+  const m = Model.fromClipboard(html, text);
   if (!m.paragraphs.length) return;
   S.startHadFormatting = S.startHadFormatting || m.hadFormatting;
   S.startFromClipboard = true;
@@ -517,7 +516,7 @@ function bindPaper() {
       }
       const dt = e.dataTransfer;
       const html = dt && dt.getData('text/html'), text = dt && dt.getData('text/plain');
-      const m = html ? Model.fromHtml(html) : Model.fromText(text || '');
+      const m = Model.fromClipboard(html, text);
       if (!m.paragraphs.length) return;
       if (m.paragraphs.length === 1) { insertTextAt(c, textOf(m.paragraphs[0])); return; }
       const p = S.doc.paragraphs[c.pi];
@@ -620,7 +619,7 @@ function cardHtml(i) {
       ${active || i.confidence === 'check' ? `<div class="why">${esc(i.why || '')}</div>` : ''}
       ${active && i.source ? `<div class="src">${ic('book', 12)}${(i.ref || []).length ? `<a data-act="open-rule" data-rule="${i.ref[0]}" style="color:inherit;text-decoration:underline;text-underline-offset:2px;cursor:pointer">${esc(i.source)}</a>` : esc(i.source)}</div>` : ''}
       ${active && i.category === 'spelling' && (i.alternatives || []).length ? `<div class="src">Ещё: ${i.alternatives.slice(0, 3).map(a => `<a data-act="use-alt" data-alt="${esc(a.text)}" style="color:var(--navy);font-weight:600;cursor:pointer">${shown(a.text)}</a>`).join(', ')}</div>` : ''}
-      ${active ? `<div class="acts">${fixable ? `<button class="btn sm ok" data-act="accept">${ic('check', 13, 'currentColor', 2.5)}Принять <span class="k">${S.win ? 'Enter' : '↵'}</span></button>` : ''}
+      ${active ? `<div class="acts">${fixable ? `<button class="btn sm ok" data-act="accept">${ic('check', 13, 'currentColor', 2.5)}Принять <span class="k">↵</span></button>` : ''}
         <button class="btn sm" data-act="reject">Отклонить</button>
         ${i.category === 'spelling' ? `<button class="btn sm ghost" data-act="add-word">В мой словарь</button>` : `<button class="btn sm ghost" data-act="ignore">Пропускать везде</button>`}</div>` : ''}
     </div></div>`;

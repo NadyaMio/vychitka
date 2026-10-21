@@ -56,3 +56,4 @@ test('paragraphHtml экранирует HTML и расставляет поме
   assert.ok(!h.includes('<script>'));
   assert.match(h, /<span class="m sp" data-k="k">что бы<\/span>/);
 });
+

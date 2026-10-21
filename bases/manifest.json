@@ -1,5 +1,5 @@
 {
-  "version": "2026.10.1",
+  "version": "2026.10.2",
   "date": "2026-10-21",
   "files": [
     {
@@ -64,8 +64,8 @@
     },
     {
       "path": "extra/words.txt",
-      "size": 8163,
-      "sha256": "41e0a233a2ea492ff36453d71132fb54c9a3a5fca9b55aa9403e15b8f53f30ef"
+      "size": 8566,
+      "sha256": "8af688023527272c62a2462172a152f31ee77a3c6e253758fcf95c2d5c3de757"
     },
     {
       "path": "freq/ru_50k.txt",
@@ -131,7 +131,7 @@
       "license": "CC BY-SA 4.0 (данные) · MIT (Az.js)",
       "files": 11,
       "bytes": 11177662,
-      "version": "2026.10.1",
+      "version": "2026.10.2",
       "status": "builtin"
     },
     {
@@ -141,7 +141,7 @@
       "license": "CC BY-SA 4.0",
       "files": 1,
       "bytes": 998861,
-      "version": "2026.10.1",
+      "version": "2026.10.2",
       "status": "builtin"
     },
     {
@@ -150,8 +150,8 @@
       "dir": "extra",
       "license": "проект «Вычитка»",
       "files": 1,
-      "bytes": 8163,
-      "version": "2026.10.1",
+      "bytes": 8566,
+      "version": "2026.10.2",
       "status": "builtin"
     },
     {
@@ -161,7 +161,7 @@
       "license": "проект «Вычитка»",
       "files": 9,
       "bytes": 128964,
-      "version": "2026.10.1",
+      "version": "2026.10.2",
       "status": "builtin"
     },
     {
@@ -171,9 +171,9 @@
       "license": "официальный нормативный документ · публикация therules.ru",
       "files": 1,
       "bytes": 428514,
-      "version": "2026.10.1",
+      "version": "2026.10.2",
       "status": "builtin"
     }
   ],
-  "totalBytes": 12747120
+  "totalBytes": 12747523
 }
