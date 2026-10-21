@@ -1,0 +1,179 @@
+{
+  "version": "2026.10.1",
+  "date": "2026-10-21",
+  "files": [
+    {
+      "path": "LICENSES.md",
+      "size": 4956,
+      "sha256": "3eb88ca7248aa589092164f22ccb89ec14810e9fed4d76a1a8dc3c6c56ae8db0"
+    },
+    {
+      "path": "az/grammemes.json",
+      "size": 10074,
+      "sha256": "4fa6b4d806693a613e86ceb7615e96b443f756d8134ec58323d9b9eee6aac31d"
+    },
+    {
+      "path": "az/gramtab-opencorpora-ext.json",
+      "size": 285855,
+      "sha256": "8c335a2c0aae483230e3cdc22de3a3bba55b7d147ba3da4540418b3abf4f73d8"
+    },
+    {
+      "path": "az/gramtab-opencorpora-int.json",
+      "size": 202321,
+      "sha256": "94e953a08c6a2cc8de9b396b096f441fcc5291f3ab3c43f9adfff57c289b04d6"
+    },
+    {
+      "path": "az/meta.json",
+      "size": 1315,
+      "sha256": "1173a75242cea6f4544f7399fa0f14496726f9f07d5f7636fbb12a35e9053eb2"
+    },
+    {
+      "path": "az/p_t_given_w.intdawg",
+      "size": 1595912,
+      "sha256": "359a4ee4d6bdfb9752080e919ff4b99b2a2bdc87d5c8de9fb6af3e73fac5e908"
+    },
+    {
+      "path": "az/paradigms.array",
+      "size": 833014,
+      "sha256": "d8e26bda48129a8da09232ad5e45d211174fed8801dd838ed682ba17b6e65cfc"
+    },
+    {
+      "path": "az/prediction-suffixes-0.dawg",
+      "size": 2466824,
+      "sha256": "d76953a94cf1da1d2c17eccb30e741a814547b1a9f84a977cfaa1baf3db30670"
+    },
+    {
+      "path": "az/prediction-suffixes-1.dawg",
+      "size": 26120,
+      "sha256": "7a2f3206c59fc9c43012edfcea08f46a68e9da9db05d360ba284bb3bb258b275"
+    },
+    {
+      "path": "az/prediction-suffixes-2.dawg",
+      "size": 1544,
+      "sha256": "4d1cddfe88f65cb11c85bcc1b30c65b3e26fec1f46c10772d9edf6f41e216922"
+    },
+    {
+      "path": "az/suffixes.json",
+      "size": 320307,
+      "sha256": "0da6775148d875e7f1c5e97d4320915b6159142d702ea92ac83c257e676672fd"
+    },
+    {
+      "path": "az/words.dawg",
+      "size": 5434376,
+      "sha256": "b4c5ea5632e2d80eaf316f85f2177c8a28b74484c6efdb70d9cc1bf36848f182"
+    },
+    {
+      "path": "extra/words.txt",
+      "size": 8163,
+      "sha256": "41e0a233a2ea492ff36453d71132fb54c9a3a5fca9b55aa9403e15b8f53f30ef"
+    },
+    {
+      "path": "freq/ru_50k.txt",
+      "size": 998861,
+      "sha256": "6095f507cc167488ec66ada5a85ac50433503a08ad24a07c6eabdf54352c4e7f"
+    },
+    {
+      "path": "reference/rules-1956.json",
+      "size": 428514,
+      "sha256": "d2fa59eac8886117becad4ad501246f4a19ed277ca923a48999f986ba2e07ef9"
+    },
+    {
+      "path": "rules/conj.json",
+      "size": 7961,
+      "sha256": "a0afbfa54d7f770e0290501b801c28e891f471bc59da48be22cd5ee75da0a422"
+    },
+    {
+      "path": "rules/grammar.json",
+      "size": 7724,
+      "sha256": "69417811ff1ac82be28140a7ebee326baf24a352b41d1e8a32c94685b2a1a7bf"
+    },
+    {
+      "path": "rules/intensifiers.json",
+      "size": 6123,
+      "sha256": "c1bfc88d005f82a167de651c8126a491f5edfb0dfd9da607947e6cf3869ba987"
+    },
+    {
+      "path": "rules/intro.json",
+      "size": 10731,
+      "sha256": "8dadf53f53d37ed188866125e861029feadfd621e3c92c83ae5b31add66423b9"
+    },
+    {
+      "path": "rules/kanc.json",
+      "size": 50452,
+      "sha256": "7a1ba679e6c6afd809482b87bcb498d111ff493ae07a19407317a5394d59a0ea"
+    },
+    {
+      "path": "rules/nominal-verbs.json",
+      "size": 16358,
+      "sha256": "1b76cb799179e359ac934a9af282a7f35a913b6cf13160e9f3ad24fd71bc91e8"
+    },
+    {
+      "path": "rules/passive.json",
+      "size": 2547,
+      "sha256": "8fc7dab40fd9cc60b4fdc801be30968c075ddf88b548d97513c39aa0e247d2d9"
+    },
+    {
+      "path": "rules/phrases.json",
+      "size": 23036,
+      "sha256": "70bbf47fa7883eea915ea66032f9f93ab8794c6fcef0d11eae6d04539bf8a610"
+    },
+    {
+      "path": "rules/yo.json",
+      "size": 4032,
+      "sha256": "d5c173c9a015b709953e5acf4b5c2b0ec1aeecc83cca18be3d240e9ba1cca1e1"
+    }
+  ],
+  "modules": [
+    {
+      "id": "spelling-opencorpora",
+      "title": "Орфографический словарь (OpenCorpora)",
+      "dir": "az",
+      "license": "CC BY-SA 4.0 (данные) · MIT (Az.js)",
+      "files": 11,
+      "bytes": 11177662,
+      "version": "2026.10.1",
+      "status": "builtin"
+    },
+    {
+      "id": "spelling-freq",
+      "title": "Частотный список (FrequencyWords)",
+      "dir": "freq",
+      "license": "CC BY-SA 4.0",
+      "files": 1,
+      "bytes": 998861,
+      "version": "2026.10.1",
+      "status": "builtin"
+    },
+    {
+      "id": "spelling-extra",
+      "title": "Дополнительный словарь",
+      "dir": "extra",
+      "license": "проект «Вычитка»",
+      "files": 1,
+      "bytes": 8163,
+      "version": "2026.10.1",
+      "status": "builtin"
+    },
+    {
+      "id": "rules",
+      "title": "Правила проверки (данные)",
+      "dir": "rules",
+      "license": "проект «Вычитка»",
+      "files": 9,
+      "bytes": 128964,
+      "version": "2026.10.1",
+      "status": "builtin"
+    },
+    {
+      "id": "rules1956",
+      "title": "Правила орфографии и пунктуации (1956)",
+      "dir": "reference",
+      "license": "официальный нормативный документ · публикация therules.ru",
+      "files": 1,
+      "bytes": 428514,
+      "version": "2026.10.1",
+      "status": "builtin"
+    }
+  ],
+  "totalBytes": 12747120
+}

@@ -1,0 +1,136 @@
+{
+  "name": "vychitka",
+  "version": "0.1.0",
+  "description": "Вычитка — корректор русского текста без ИИ: орфография, пунктуация, типографика, литературная правка и сверка версий",
+  "main": "src/main/main.js",
+  "scripts": {
+    "test": "node --test \"test/engine/*.test.js\" \"test/unit/*.test.js\"",
+    "start": "electron .",
+    "test:engine": "node --test \"test/engine/*.test.js\"",
+    "test:e2e": "node test/e2e/run.js",
+    "dist:mac": "electron-builder --mac --publish never",
+    "dist:win": "electron-builder --win --publish never",
+    "bases:manifest": "node scripts/build-bases-manifest.js",
+    "test:unit": "node --test \"test/unit/*.test.js\""
+  },
+  "author": "NadyaMio",
+  "license": "MIT",
+  "type": "commonjs",
+  "dependencies": {
+    "az": "^0.2.3",
+    "diff": "^9.0.0",
+    "docx": "^9.13.0",
+    "electron-updater": "^6.8.9",
+    "jszip": "^3.10.2",
+    "mammoth": "^1.13.0",
+    "pdfjs-dist": "^4.10.38"
+  },
+  "devDependencies": {
+    "electron": "^45.0.0",
+    "electron-builder": "^26.15.3",
+    "playwright": "^1.64.1"
+  },
+  "productName": "Vychitka",
+  "homepage": "https://github.com/NadyaMio/vychitka",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/NadyaMio/vychitka.git"
+  },
+  "build": {
+    "appId": "ru.vychitka.app",
+    "productName": "Vychitka",
+    "copyright": "© 2026 Вычитка",
+    "asar": false,
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**",
+      "package.json",
+      "!**/*.map",
+      "!node_modules/az/dicts/**",
+      "!node_modules/pdfjs-dist/legacy/web/**",
+      "!node_modules/pdfjs-dist/web/**",
+      "!node_modules/pdfjs-dist/build/**",
+      "!node_modules/**/test/**",
+      "!node_modules/**/*.md",
+      "!node_modules/@napi-rs/**",
+      "!node_modules/dictionary-ru/**",
+      "!node_modules/nspell/**"
+    ],
+    "extraResources": [
+      {
+        "from": "bases",
+        "to": "bases",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "fileAssociations": [
+      {
+        "ext": [
+          "docx",
+          "rtf",
+          "odt",
+          "txt",
+          "md"
+        ],
+        "name": "Text document",
+        "role": "Viewer"
+      }
+    ],
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "category": "public.app-category.productivity",
+      "artifactName": "Vychitka-${version}-mac-${arch}.${ext}",
+      "icon": "build/icon.png",
+      "extendInfo": {
+        "CFBundleDisplayName": "Вычитка"
+      }
+    },
+    "dmg": {
+      "title": "Вычитка ${version}",
+      "artifactName": "Vychitka-${version}-mac-${arch}.${ext}"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "artifactName": "Vychitka-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "Вычитка",
+      "uninstallDisplayName": "Вычитка",
+      "artifactName": "Vychitka-Setup-${version}.${ext}",
+      "language": "1049"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "NadyaMio",
+        "repo": "vychitka",
+        "releaseType": "draft"
+      }
+    ],
+    "afterSign": "build/adhoc-sign.js"
+  }
+}
