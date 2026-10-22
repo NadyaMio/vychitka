@@ -415,3 +415,36 @@ test('manual rules: ordinary prose produces no issues from the new rules', async
 });
 
 module.exports = { run, expectFix, expectClean };
+
+test('compound sentence with «и»: subject + predicate after «и» → comma (§ 137); rows, shared conjunction, questions stay clean', async () => {
+  await ready();
+  expectFix('Поговорила с директором и он мне обещал позвонить вечером.', 'punct.comma-compound-and', 'директором и', 'директором, и', 'check');
+  expectFix('Лестница закончилась и они прошли огромную арку.', 'punct.comma-compound-and', 'закончилась и', 'закончилась, и', 'sure');
+  expectFix('Мне было 16 и я влюбилась в парня своей подруги.', 'punct.comma-compound-and', '16 и', '16, и', 'check');
+  expectFix('Я ревела так долго и папа пошёл рыться в помойке.', 'punct.comma-compound-and', 'долго и', 'долго, и', 'check');
+  expectFix('Остались аудиокассеты с нашими альбомами и вот в выходные я откопал две.', 'punct.comma-compound-and', 'альбомами и', 'альбомами, и', 'check');
+  expectClean([
+    'Мы купили хлеб и молоко и пошли домой.',
+    'Мой коллега интересуется историей и часто посещает музеи и выставки.',
+    'Когда он пришёл и мы сели ужинать, зазвонил телефон.',
+    'Кто ты и что тебе нужно?',
+    'Он встал и вышел.',
+    'Я видел его и её.',
+    'Мобильных тогда не было и звонила из телефонных будок.',
+    'Лестница закончилась, и они прошли огромную арку.',
+  ], 'punct.comma-compound-and');
+});
+
+test('repeated «и»: a single «и» between two members of one row is not a repeated conjunction', async () => {
+  await ready();
+  expectClean([
+    'Мой коллега интересуется историей и часто посещает музеи и выставки.',
+    'Серые дома и мостовые, угрюмые лица и беспросветные сумерки.',
+    'Девушки и парни — это разные понятия, как лёд и огонь, коты и собаки.',
+    'Её хочется хвалить снова и снова.',
+    'Действия и результаты оказались полностью рассчитанными и предсказанными.',
+    'Ни один из них нельзя считать ни полным, ни точным.',
+    'Распределить по бумаге натёртый имбирь и цедру и сушить 30 минут.',
+  ], 'punct.comma-repeated-conj');
+  expectFix('Он и опять поднимался и опять делал то же.', 'punct.comma-repeated-conj', 'поднимался и', 'поднимался, и', 'check');
+});

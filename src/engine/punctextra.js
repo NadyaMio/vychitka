@@ -1344,7 +1344,7 @@ function compoundAnd(ctx, sentence, wi, out) {
   let adverbBefore = false;
   if (AND_SKIP_AFTER.has(first.lower)) { adverbBefore = true; k++; first = ctx.tokens[words[k]]; if (!first || !adjacentTokens(ctx, ctx.tokens[words[k - 1]], first)) return; }
   // «и вот в выходные я откопал», «и через час мы уехали» — one short prepositional phrase before the subject
-  if (hasPos(first, 'PREP') && !nounParses(first).length) {
+  if (hasPos(first, 'PREP') && !nounParses(first).some((p) => p.score >= 0.05)) { // «в» also has zero-score noun readings
     for (let j = k + 1; j <= k + 3 && j < words.length; j++) {
       const t = ctx.tokens[words[j]];
       if (!adjacentTokens(ctx, ctx.tokens[words[j - 1]], t)) return;

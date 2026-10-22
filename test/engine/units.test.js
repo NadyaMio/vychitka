@@ -275,3 +275,44 @@ test('compare: hyphenation glued, whitespace-only, added paragraph', async () =>
   const space = engine.compare(doc([`150${NBSP}000 рублей`]), doc(['150 000 рублей']));
   assert.deepEqual(space.diffs.map((d) => d.type), ['space']);
 });
+
+test('punctuation: genitive «который», question words, relative words after a verb', async () => {
+  await ready();
+  // «которой» after a noun that does not agree with it: the clause starts at the noun
+  assert.ok(one(['Он участвовал в составлении конституции республики президентом которой был избран Луи.'], (is) => is.before === 'республики президентом' && is.after === 'республики, президентом' && is.confidence === 'sure').hit);
+  assert.ok(one(['Возник конфликт в результате которого житель оказался в больнице.'], (is) => is.before === 'конфликт в' && is.after === 'конфликт, в').hit);
+  // the clause already begins after the comma — nothing to add
+  for (const text of ['Молодая женщина, сексуализация которой наступила рано.', 'Задачи, на выполнение которых есть сроки.', 'Есть специалисты, многие из которых работают здесь.', 'Проверка, что пользователь не может удалить топик, автором которого он не является.']) {
+    const r = one([text], (is) => is.ruleId === 'punct.comma-before-conj');
+    assert.equal(r.hit, undefined, describe(r.issues));
+  }
+  // «многие из которых» without the comma → before the quantifier
+  assert.ok(one(['Есть специалисты многие из которых работают здесь.'], (is) => is.before === 'специалисты многие' && is.after === 'специалисты, многие').hit);
+  // question words in a question sentence only after a verb
+  for (const text of ['Привет, старик, это кто тебе насолил?', 'Чувак! Ты чем тут занимаешься?!', 'Тогда зачем вы тратите время?', 'Ты с какого района?']) {
+    const r = one([text], (is) => is.ruleId === 'punct.comma-before-conj');
+    assert.equal(r.hit, undefined, `${text}\n${describe(r.issues)}`);
+  }
+  assert.ok(one(['Ты знаешь кто пришёл?'], (is) => is.before === 'знаешь кто' && is.after === 'знаешь, кто' && is.confidence === 'sure').hit);
+  assert.ok(one(['Я не понял почему он ушёл.'], (is) => is.before === 'понял почему' && is.confidence === 'sure').hit);
+  assert.ok(one(['Спасибо всем тем кто пришёл.'], (is) => is.before === 'тем кто' && is.after === 'тем, кто' && is.confidence === 'sure').hit);
+  assert.ok(one(['Всё что я хочу сказать — это правда.'], (is) => is.before === 'Всё что' && is.confidence === 'sure').hit);
+  assert.ok(one(['Мы решили что пора идти, кстати уже поздно.'], (is) => is.before === 'пора идти, кстати уже' || is.before === 'кстати уже').hit);
+  // stays clean
+  const clean = engine.check(doc(['Несмотря на то что шёл дождь, мы пошли гулять.', 'Там кормят куда лучше, чем в баре.', 'Закон Латта: Если за костёр отвечает больше одного человека, он не разгорится.', 'Бог знает сколько лет он тут живёт.', 'Ну что сказать.', 'Это когда стоишь по колено в воде.']));
+  assert.equal(clean.issues.filter((is) => is.ruleId === 'punct.comma-before-conj').length, 0, describe(clean.issues));
+});
+
+test('punctuation: intro words that are predicates stay silent; strict mode adds the noisy ones', async () => {
+  await ready();
+  const clean = engine.check(doc(['Хотя вся эта масса кажется устойчивой.', 'Банкир может быть отстранён от работы.', 'В данный момент возможно использование клавиатуры.', 'Автомобиль припаркован таким образом, что мешает всем.', 'Охват детей в общем числе детей.', 'К счастью Михайлова, Калугин был в хорошем расположении духа.', 'В принципе я к этому готова.', 'Он в свою очередь промолчал.', 'Книги, например романы, она читала запоем.']));
+  assert.equal(clean.issues.filter((is) => is.ruleId === 'punct.intro').length, 0, describe(clean.issues));
+  assert.ok(one(['Погода, кажется портится.'], (is) => is.ruleId === 'punct.intro' && is.after === 'кажется, портится').hit);
+  assert.ok(one(['Он кстати уже ушёл.'], (is) => is.ruleId === 'punct.intro' && is.after === 'Он, кстати, уже' && is.confidence === 'sure').hit);
+  assert.ok(one(['Ну конечно это я.'], (is) => is.ruleId === 'punct.intro' && is.before === 'конечно это' && is.after === 'конечно, это').hit);
+  assert.ok(one(['Она любит книги например романы.'], (is) => is.ruleId === 'punct.intro' && is.before === 'книги например' && is.after === 'книги, например').hit);
+  const strict = engine.check(doc(['В принципе я к этому готова.', 'Он в свою очередь промолчал.']), { strict: true });
+  assert.equal(strict.issues.filter((is) => is.ruleId === 'punct.intro').length, 2, describe(strict.issues));
+  assert.ok(strict.issues.every((is) => is.confidence === 'check'));
+  assert.equal(engine.defaultSettings().strict, false);
+});

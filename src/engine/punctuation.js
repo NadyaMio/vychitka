@@ -317,7 +317,7 @@ function subordinatingIssue(ctx, sentence, wi, conj) {
     let confidence = entry.confidence || 'check';
     if (entry.needsHead && !isHead(ctx, prevTok, conj.headPos)) confidence = 'check';
     if (demonstrativeHead) confidence = 'sure';
-    else if (entry.sureAfterVerb && !question && isVerbHead(prevTok)) confidence = 'sure'; // «знаю, кто», «скажи, когда», «понял, почему»
+    else if (entry.sureAfterVerb && isVerbHead(prevTok)) confidence = 'sure'; // «знаю, кто», «скажи, когда», «понял, почему», «ты знаешь, кто пришёл?»
     return commaIssue(ctx, prevTok, tok, 'punct.comma-before-conj', confidence, whyFor(entry, false), refFor(entry), undefined, { conj: entry.text });
   }
   return null;
