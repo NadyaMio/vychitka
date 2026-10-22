@@ -77,6 +77,7 @@ function lst(i) { if (!S.litState.has(i.key)) S.litState.set(i.key, { selected: 
 const hasFix = i => i.after !== i.before || (i.alternatives || []).length > 0;
 const ignoreKey = i => i.category === 'spelling' ? 'w:' + i.before.toLowerCase() : `${i.ruleId}:${i.before}`;
 
+let lastSideHtml = '';
 function renderSide() {
   const nav = (key, icon, label, cnt) => `<div class="nav${(S.screen === key || (key === 'proof' && S.screen === 'doc' && S.mode !== 'lit') || (key === 'lit' && S.screen === 'doc' && S.mode === 'lit')) ? ' on' : ''}" data-nav="${key}">${ic(icon)}<span class="lbl">${label}</span>${cnt != null ? `<span class="cnt">${cnt}</span>` : ''}</div>`;
   const proofCnt = S.doc ? visibleIssues().length : null;
@@ -95,11 +96,13 @@ function renderSide() {
   } else if (S.basesUpd && S.basesUpd.newer && S.screen !== 'dict') {
     upd = `<div class="upd"><b>Доступны новые базы ${esc(S.basesUpd.remote)}</b><button class="btn sm" data-nav="dict">${ic('refresh', 13)}Обновить</button></div>`;
   }
-  $('#side').innerHTML = `<div class="brand"><div class="logo">В</div><div><b>Вычитка</b><small>корректор без ИИ</small></div></div>
+  const html = `<div class="brand"><div class="logo">В</div><div><b>Вычитка</b><small>корректор без ИИ</small></div></div>
     ${nav('start', 'file', 'Документ')}${nav('proof', 'spell', 'Корректура', proofCnt)}${nav('lit', 'feather', 'Литературная правка', litCnt)}${nav('compare', 'compare', 'Сверка версий')}
     <div class="sl">Базы</div>${nav('dict', 'book', 'Словари и базы')}${nav('settings', 'sliders', 'Настройки проверки')}
     ${recent ? `<div class="sl">Недавние</div>${recent}` : ''}
     <div class="sfoot"><div class="row"><span class="dot"></span>Работает без интернета</div><div>Базы от ${basesDate}</div>${upd}</div>`;
+  // replacing the DOM between mousedown and mouseup swallows the click — only touch it when something changed
+  if (html !== lastSideHtml) { $('#side').innerHTML = html; lastSideHtml = html; }
 }
 
 // ============================================================ screens
@@ -617,7 +620,7 @@ function cardHtml(i) {
     <div class="cbody"><div class="ctop"><span class="tag ${CAT[i.category] ? CAT[i.category].cls : 'st'}">${tagFor(i)}</span>${confHtml(i)}<span class="loc">Абз. ${paraNo(i.para)}</span></div>
       ${fixLine(i)}
       ${active || i.confidence === 'check' ? `<div class="why">${esc(i.why || '')}</div>` : ''}
-      ${active && i.source ? `<div class="src">${ic('book', 12)}${(i.ref || []).length ? `<a data-act="open-rule" data-rule="${i.ref[0]}" style="color:inherit;text-decoration:underline;text-underline-offset:2px;cursor:pointer">${esc(i.source)}</a>` : esc(i.source)}</div>` : ''}
+      ${active && i.source ? `<div class="src">${ic('book', 12)}${(i.ref || []).length ? `<a data-act="open-rule" data-rule="${i.ref[0]}" style="color:inherit;text-decoration:underline;text-underline-offset:2px;cursor:pointer">${esc(i.source)}</a>` : (i.manualRef || []).length ? `<a data-act="open-manual" data-manual="${esc(i.manualRef[0])}" style="color:inherit;text-decoration:underline;text-underline-offset:2px;cursor:pointer">${esc(i.source)}</a>` : esc(i.source)}</div>` : ''}
       ${active && i.category === 'spelling' && (i.alternatives || []).length ? `<div class="src">Ещё: ${i.alternatives.slice(0, 3).map(a => `<a data-act="use-alt" data-alt="${esc(a.text)}" style="color:var(--navy);font-weight:600;cursor:pointer">${shown(a.text)}</a>`).join(', ')}</div>` : ''}
       ${active ? `<div class="acts">${fixable ? `<button class="btn sm ok" data-act="accept">${ic('check', 13, 'currentColor', 2.5)}Принять <span class="k">↵</span></button>` : ''}
         <button class="btn sm" data-act="reject">Отклонить</button>
@@ -654,20 +657,23 @@ function renderPanel() {
   const body = S.checking && !S.issues.length ? `<div class="empty">${ic('spinner', 20)}<br>Проверяю текст…</div>`
     : !vis.length && !S.stale.length ? `<div class="empty"><b>Ошибок не найдено</b>Текст проверен по словарям и правилам профиля «${esc(profileName())}».</div>`
     : list.map(cardHtml).join('') + S.stale.map(staleCard).join('');
-  panel.innerHTML = `<div class="ph"><h3>Исправления <small>${vis.length} ${plural(vis.length, ['найдено', 'найдено', 'найдено'])} · ${selCount} ${plural(selCount, ['выбрано', 'выбрано', 'выбрано'])}</small></h3>
+  const html = `<div class="ph"><h3>Исправления <small>${vis.length} ${plural(vis.length, ['найдено', 'найдено', 'найдено'])} · ${selCount} ${plural(selCount, ['выбрано', 'выбрано', 'выбрано'])}</small></h3>
       ${S.notice ? `<div class="notice">${ic('info', 16, '#a9790c')}<div>${S.notice}</div></div>` : `<div class="chips">${chips}</div>`}</div>
     <div class="selbar"><div class="cb ${allSel ? 'on' : someSel ? 'part' : ''}" data-act="toggle-all">${allSel ? ic('check', 12, '#fff', 3) : ''}</div><span data-act="toggle-all">Выбрать все</span><span class="sp1"></span>
       <span style="display:flex;align-items:center;gap:6px">Сначала: <select id="sortSel"><option value="text"${S.sort === 'text' ? ' selected' : ''}>по тексту</option><option value="type"${S.sort === 'type' ? ' selected' : ''}>по типу</option><option value="conf"${S.sort === 'conf' ? ' selected' : ''}>уверенные</option></select>${ic('down', 14)}</span></div>
     <div class="list" id="list">${body}</div>
     <div class="pf"><button class="btn" data-act="reject-selected"${selCount ? '' : ' disabled'}>${ic('x', 14)}Отклонить</button><span class="sp1"></span>
       <button class="btn pri" data-act="apply-selected"${selCount ? '' : ' disabled'}>${ic('check', 14, 'currentColor', 2.5)}Применить выбранные · ${selCount}</button></div>`;
+  if (panel.dataset.html === html) return;
+  panel.dataset.html = html;
+  panel.innerHTML = html;
   $('#sortSel').onchange = e => { S.sort = e.target.value; renderPanel(); };
   const act = panel.querySelector('.card.on');
   if (act) act.scrollIntoView({ block: 'nearest' });
 }
 
 function renderLitPanel(panel) {
-  if (!S.lit) { panel.innerHTML = `<div class="empty">${ic('spinner', 20)}<br>Анализирую стиль…</div>`; return; }
+  if (!S.lit) { panel.dataset.html = ''; panel.innerHTML = `<div class="empty">${ic('spinner', 20)}<br>Анализирую стиль…</div>`; return; }
   const L = S.lit;
   const vis = litVisible();
   const color = L.score < 5 ? '#d6453d' : L.score < 7.5 ? '#e08a1e' : '#2e7d57';
@@ -689,11 +695,14 @@ function renderLitPanel(panel) {
       ${active ? `<div class="acts">${hasFix(i) ? `<button class="btn sm ok" data-act="lit-accept">${ic('check', 13, 'currentColor', 2.5)}Принять</button>` : ''}<button class="btn sm" data-act="lit-reject">Отклонить</button><button class="btn sm ghost" data-act="lit-manual">Править вручную</button></div>` : ''}
       </div></div>`;
   }).join('');
-  panel.innerHTML = `<div class="ph"><div style="display:flex;align-items:center;gap:14px"><div style="width:58px;height:58px;border-radius:29px;border:5px solid ${color};display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:800;flex:none">${String(L.score).replace('.', ',')}</div>
+  const html = `<div class="ph"><div style="display:flex;align-items:center;gap:14px"><div style="width:58px;height:58px;border-radius:29px;border:5px solid ${color};display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:800;flex:none">${String(L.score).replace('.', ',')}</div>
       <div><b style="font-size:15px">Ясность текста</b><div style="font-size:12px;color:#7d786d;line-height:1.45;margin-top:2px">из 10 · считается по стоп-словам, длине предложений и повторам</div></div></div>
       <div style="margin-top:8px">${metrics}</div></div>
     <div class="list">${cards || `<div class="empty"><b>Стилистических замечаний нет</b>Текст читается легко.</div>`}</div>
     <div class="pf"><button class="btn" data-act="lit-reject-all"${vis.length ? '' : ' disabled'}>Отклонить все</button><span class="sp1"></span><button class="btn pri" data-act="lit-apply"${sel ? '' : ' disabled'}>${ic('check', 14, 'currentColor', 2.5)}Применить выбранные · ${sel}</button></div>`;
+  if (panel.dataset.html === html) return;
+  panel.dataset.html = html;
+  panel.innerHTML = html;
   const act = panel.querySelector('.card.on');
   if (act) act.scrollIntoView({ block: 'nearest' });
 }
@@ -789,9 +798,29 @@ async function openWordPop(issue, anchor) {
   popEl.className = 'pop';
   popEl.dataset.key = issue.key;
   let tab = 'orth';
+  let corpus = null; // { loading } | { data } | { error }
+  const lemma = (info && info.lemma) || (sugg[0] && sugg[0].word) || issue.after;
+  const loadCorpus = async () => {
+    if (corpus) return;
+    if (!(S.nkrya && S.nkrya.connected)) { corpus = { off: true }; return draw(); }
+    corpus = { loading: true }; draw();
+    try { corpus = { data: await window.api.nkryaPortrait(lemma) }; } catch (e) { corpus = { error: String(e.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '') }; }
+    if (popEl) draw();
+  };
+  const corpusHtml = () => {
+    if (!corpus || corpus.loading) return `<span style="color:var(--muted2)">${ic('spinner', 13)} Спрашиваю Национальный корпус…</span>`;
+    if (corpus.off) return `<span style="color:var(--muted2)">Национальный корпус не подключён.</span> <a data-popact="nkrya-connect" style="color:var(--navy);font-weight:600;cursor:pointer">Подключить</a>`;
+    if (corpus.error) return `<span style="color:var(--red-ink)">${esc(corpus.error)}</span>`;
+    const d = corpus.data;
+    const f = d.frequency;
+    const ex = d.examples.map(x => { let h = '', pos = 0; for (const [a, b] of x.hits) { h += esc(x.text.slice(pos, a)) + '<b>' + esc(x.text.slice(a, b)) + '</b>'; pos = b; } h += esc(x.text.slice(pos)); return `<div style="font-family:'PT Serif',serif;font-size:13px;line-height:1.5;padding:4px 0 4px 10px;border-left:2px solid var(--line);margin-top:6px">${h}${x.title ? `<div style="font-family:Inter;font-size:10.5px;color:var(--muted3)">${esc(x.title.slice(0, 90))}</div>` : ''}</div>`; }).join('');
+    return `${f ? `<b style="font-family:'PT Serif',serif;font-size:14px">${esc(d.lemma)}</b> — ${String(Math.round(f.ipm * 10) / 10).replace('.', ',')} на миллион словоупотреблений · ${esc(f.title)}` : `<b>${esc(d.lemma)}</b> — в основном корпусе не найдено`}
+      ${ex || ''}<div style="margin-top:6px"><a data-popact="nkrya-open" style="color:var(--navy);font-weight:600;cursor:pointer">Открыть в НКРЯ</a></div>`;
+  };
   const tabHtml = () => {
+    if (tab === 'corpus') return corpusHtml();
     if (tab === 'morph') return info && info.morph && info.morph.length ? info.morph.slice(0, 10).map(m => `<div style="display:flex;gap:8px"><b style="font-family:'PT Serif',serif;font-size:13.5px;min-width:120px">${esc(m.form)}</b><span style="color:var(--muted2)">${esc(m.tags)}</span></div>`).join('') : '<span style="color:var(--muted2)">Морфологических данных нет.</span>';
-    if (tab === 'dal') return info && info.dal ? `<b style="font-family:'PT Serif',serif;font-size:14px">${esc(info.dal.word || '')}</b> ${esc(info.dal.text || '')}` : '<span style="color:var(--muted2)">В словаре Даля этого слова нет или словарь не установлен.</span>';
+    if (tab === 'dal') return info && info.dal ? `<div style="max-height:180px;overflow:auto;user-select:text"><b style="font-family:'PT Serif',serif;font-size:14px">${esc(info.dal.word || '')}</b> ${esc(info.dal.text || '')}</div>${info.dal.url ? `<div style="margin-top:6px"><a data-popact="dal-open" style="color:var(--navy);font-weight:600;cursor:pointer">Открыть на Викитеке</a></div>` : ''}` : '<span style="color:var(--muted2)">В словаре Даля такого слова нет.</span>';
     return info && (info.forms || info.rule) ? `${info.forms ? `<b style="font-family:'PT Serif',serif;font-size:14px">${esc(info.forms)}</b><br>` : ''}${info.rule ? `<span style="color:var(--muted2)">Правило: ${esc(info.rule)}</span>` : ''}` : `<span style="color:var(--muted2)">${esc(issue.why || '')}</span>`;
   };
   const draw = () => {
@@ -800,7 +829,7 @@ async function openWordPop(issue, anchor) {
       <div style="font-size:12px;color:var(--muted3);margin-top:2px">${info && info.known ? 'Слово есть в словаре, но здесь, вероятно, ошибка' : 'Нет в словаре'} · похожие слова с учётом падежа в предложении</div></div>
       <div style="padding:6px 8px">${sugg.slice(0, 3).map((s, k) => `<div class="sug${k === 0 ? ' on' : ''}" data-pick="${esc(s.word)}"><span class="w">${shown(s.word)}</span><small>${esc(s.note || '')}${s.fits && s.note ? ' — подходит' : ''}</small><span class="sp1"></span><span class="kbd">${k + 1}</span></div>`).join('')}</div>
       <div style="margin:0 12px;padding:12px;background:var(--bg);border-radius:10px;font-size:12.5px;line-height:1.55;color:var(--ink2)">
-        <div style="display:flex;gap:6px;margin-bottom:8px">${[['orth', 'Орфографический'], ['dal', 'Толковый (Даль)'], ['morph', 'Морфология']].map(([k, t]) => `<span class="chip${tab === k ? ' on' : ''}" data-tab="${k}" style="height:22px;font-size:11px">${t}</span>`).join('')}</div>${tabHtml()}</div>
+        <div style="display:flex;gap:5px;margin-bottom:8px;flex-wrap:wrap">${[['orth', 'Орфографический'], ['dal', 'Толковый (Даль)'], ['morph', 'Морфология'], ['corpus', 'Корпус']].map(([k, t]) => `<span class="chip${tab === k ? ' on' : ''}" data-tab="${k}" style="height:22px;font-size:11px">${t}</span>`).join('')}</div>${tabHtml()}</div>
       <div style="padding:12px;display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm ok" data-pick="${esc(sugg[0] ? sugg[0].word : issue.after)}">${ic('check', 13, 'currentColor', 2.5)}Заменить</button>
         <button class="btn sm" data-popact="addword">${ic('plus', 13)}В мой словарь</button><button class="btn sm ghost" data-popact="ignore">Игнорировать</button><span class="sp1"></span>
         <button class="btn sm ghost" data-popact="gramota">${ic('ext', 13)}Грамота.ру</button></div>`;
@@ -813,12 +842,15 @@ async function openWordPop(issue, anchor) {
   popEl.addEventListener('click', e => {
     const t = e.target.closest('[data-tab],[data-pick],[data-popact]');
     if (!t) return;
-    if (t.dataset.tab) { tab = t.dataset.tab; draw(); return; }
+    if (t.dataset.tab) { tab = t.dataset.tab; draw(); if (tab === 'corpus') loadCorpus(); return; }
+    if (t.dataset.popact === 'nkrya-open') { window.api.openExternal(corpus.data.url); return; }
+    if (t.dataset.popact === 'dal-open') { window.api.openExternal(info.dal.url); return; }
     if (t.dataset.pick != null) { closePop(); applyIssues([{ ...issue, chosen: t.dataset.pick }]); return; }
     const a = t.dataset.popact;
     closePop();
     if (a === 'addword') addUserWord(issue.before);
     if (a === 'ignore') { st(issue).rejected = true; refreshDoc(); }
+    if (a === 'nkrya-connect') openNkryaModal();
     if (a === 'gramota') window.api.openExternal(`https://gramota.ru/poisk?query=${encodeURIComponent(issue.before)}&mode=slovari`);
   });
   popEl.pickN = n => { const s = sugg[n]; if (s) { closePop(); applyIssues([{ ...issue, chosen: s.word }]); } };

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, clipboard, Menu, nativeTheme } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, clipboard, Menu, nativeTheme, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { Store } = require('./store');
@@ -6,13 +6,14 @@ const { EngineHost } = require('./engine-host');
 const { readDocument, SUPPORTED } = require('./files');
 const { writeResult, htmlToPdf } = require('./save');
 const { BasesUpdater, AppUpdater } = require('./updates');
+const { Nkrya } = require('./nkrya');
 
 const IS_MAC = process.platform === 'darwin';
 const ROOT = path.join(__dirname, '..', '..');
 nativeTheme.themeSource = 'light';
 
 let win = null;
-let store, engine, bases, appUpdater;
+let store, engine, bases, appUpdater, nkrya;
 let pendingOpen = null; // file passed before the window existed (Finder "Open with", argv)
 
 // End-to-end tests run without native dialogs: save dialogs write into VYCHITKA_E2E_DIR,
@@ -114,7 +115,7 @@ function registerIpc() {
     return data;
   });
   ipcMain.handle('engine', async (_e, method, args) => {
-    const allowed = ['check', 'literary', 'wordInfo', 'compare', 'basesInfo', 'applyNbsp', 'rule', 'searchRules'];
+    const allowed = ['check', 'literary', 'wordInfo', 'compare', 'basesInfo', 'applyNbsp', 'rule', 'searchRules', 'manualRule'];
     if (!allowed.includes(method)) throw new Error(`unknown engine method ${method}`);
     return engine.call(method, args);
   });
@@ -194,6 +195,10 @@ function registerIpc() {
     if (r.updated) await engine.reload();
     return { ...r, bases: bases.current() };
   });
+  ipcMain.handle('nkrya:status', () => nkrya.status());
+  ipcMain.handle('nkrya:connect', (_e, token) => nkrya.connect(token));
+  ipcMain.handle('nkrya:disconnect', () => nkrya.disconnect());
+  ipcMain.handle('nkrya:portrait', (_e, lemma) => nkrya.portrait(lemma));
   ipcMain.handle('appupdate:check', () => appUpdater.check());
   ipcMain.handle('appupdate:install', () => appUpdater.install());
   ipcMain.handle('app:close-confirmed', () => { win.__allowClose = true; win.close(); });
@@ -222,6 +227,7 @@ app.whenReady().then(() => {
   bases = new BasesUpdater({ bundledDir: bundledBasesDir(), userDir: userBasesDir(), appVersion: app.getVersion(), onProgress: p => send('bases:progress', p) });
   engine = new EngineHost(() => ({ basesDir: bases.currentDir(), userWords: allUserWords() }));
   engine.start().catch(e => console.error('engine init failed', e));
+  nkrya = new Nkrya({ store, safeStorage, cacheFile: path.join(app.getPath('userData'), 'nkrya-cache.json') });
   appUpdater = new AppUpdater({ app, shell, platform: process.platform, onEvent: s => send('appupdate:state', s) });
   registerIpc();
   buildMenu();

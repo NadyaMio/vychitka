@@ -3,24 +3,36 @@
    activateIssue, acceptActive, rejectActive, moveActive, st, lst, issueByKey, visibleIssues, litVisible, applyIssues, addUserWord, ignoreKey, refreshDoc, closePop, openSaveModal, undo, redo,
    setSettings, selectProfile, saveProfileDialog, settings, cmpPick, runCompare, renderCompare, renderCompareBody, cmpShow, compareReportHtml, renderDict, dictAdd, basesCheck, basesUpdate, toast, fail, esc, modal, ic, setCaret, hasFix, textOf, Model */
 
+// Sidebar items react on press, not on release: a re-render can never swallow them, and one press = one action.
+document.addEventListener('pointerdown', e => {
+  if (e.button !== 0) return;
+  const t = e.target.closest('#side [data-nav], #side [data-recent]');
+  if (!t) return;
+  e.preventDefault();
+  navigate(t.dataset.nav, t.dataset.recent);
+});
+function navigate(nav, recent) {
+  closePop();
+  if (recent) return openFile(recent);
+  if (nav === 'proof' || nav === 'lit') {
+    if (!S.doc) return show('start');
+    const wasLit = S.mode === 'lit';
+    show('doc', nav);
+    if (nav === 'lit' && !S.lit) runCheck();
+    else if (wasLit !== (nav === 'lit')) renderPaper(false);
+    return;
+  }
+  return show(nav);
+}
+
 document.addEventListener('click', async e => {
+  if (e.target.closest('#side [data-nav], #side [data-recent]')) return; // handled on pointerdown
   const t = e.target.closest('[data-nav],[data-recent],[data-act],[data-mode],[data-startmode],[data-filter],[data-key],[data-litkey],[data-check],[data-profile],[data-delprofile],[data-cmpmode],[data-cmpfilter],[data-diff],[data-module],[data-delword]');
   if (popEl && !e.target.closest('.pop') && !e.target.closest('.m')) closePop();
   if (!t) return;
   const d = t.dataset;
 
-  if (d.nav) {
-    if (d.nav === 'proof' || d.nav === 'lit') {
-      if (!S.doc) return show('start');
-      const wasLit = S.mode === 'lit';
-      show('doc', d.nav);
-      if (d.nav === 'lit' && !S.lit) runCheck();
-      else if (wasLit !== (d.nav === 'lit')) { renderPaper(false); }
-      return;
-    }
-    return show(d.nav);
-  }
-  if (d.recent) return openFile(d.recent);
+  if (d.nav || d.recent) return navigate(d.nav, d.recent);
   if (d.startmode) { S.startMode = d.startmode; return renderModes(); }
   if (d.mode && t.closest('.seg')) {
     S.mode = d.mode; closePop();
@@ -67,6 +79,7 @@ document.addEventListener('click', async e => {
     const act = e.target.closest('[data-act]');
     const a = act && act.dataset.act;
     if (a === 'open-rule') return openRule(act.dataset.rule);
+    if (a === 'open-manual') return openManualRule(act.dataset.manual);
     if (a === 'toggle') { st(i).selected = !st(i).selected; renderPanel(); renderStatus(); if (S.mode === 'diff') renderPaper(false); return; }
     if (a === 'accept') { S.activeKey = i.key; return acceptActive(); }
     if (a === 'reject') { S.activeKey = i.key; return rejectActive(); }
@@ -139,6 +152,7 @@ document.addEventListener('click', async e => {
     case 'dict-shared': { const r = await window.api.dictSharedPick(); if (r) { S.store = await window.api.store.get(); toast(`Общий словарь подключён: ${r.words} слов`); if (S.doc) runCheck(); renderDict(); } return; }
     case 'open-rule': return openRule(d.rule);
     case 'rules-browser': return openRulesBrowser();
+    case 'nkrya-connect': return openNkryaModal();
     case 'bases-check': return basesCheck();
     case 'bases-update': return basesUpdate();
     case 'app-update': try { await window.api.appUpdateInstall(); } catch (er) { fail(er, 'Обновление не установилось: '); } return;
@@ -244,6 +258,7 @@ window.api.onBeforeClose(() => {
   S.info = await window.api.info();
   S.store = await window.api.store.get();
   S.win = S.info.platform === 'win32';
+  S.nkrya = await window.api.nkryaStatus();
   S.mod = S.win ? 'Ctrl+' : '⌘';
   document.getElementById('app').classList.add(S.win ? 'win' : 'mac');
   show('start');

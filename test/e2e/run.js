@@ -126,6 +126,19 @@ async function step(name, fn) {
     await shot('06-edited');
   });
 
+  await step('меню слева срабатывает с первого клика, в том числе во время перепроверки', async () => {
+    const want = { dict: 'Мой словарь', settings: 'Что проверять', proof: 'Исправления', compare: 'Расхождения', start: 'Новая проверка' };
+    const order = ['dict', 'proof', 'settings', 'proof', 'compare', 'start', 'proof', 'dict', 'settings', 'proof'];
+    for (let round = 0; round < 2; round++) {
+      for (const k of order) {
+        await win.click(`#side [data-nav=${k}]`);
+        await win.waitForSelector(`#main >> text=${want[k]}`, { timeout: 3000 });
+        const on = await win.$eval('#side .nav.on', el => el.dataset.nav);
+        assert.strictEqual(on, k, `после клика по «${k}» активен «${on}»`);
+      }
+    }
+  });
+
   await step('отмена ⌘Z возвращает текст', async () => {
     await win.click('[data-act=undo]');
     await win.waitForFunction(() => !document.querySelector('#paper').innerText.includes('поставить сроки'), null, { timeout: 10000 });

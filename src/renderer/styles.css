@@ -164,7 +164,7 @@ svg { flex: none; }
 .opt b { font-size: 13.5px; display: block; }
 .opt small { font-size: 12px; color: #7d786d; line-height: 1.45; display: block; margin-top: 2px; }
 .mf { padding: 16px 24px; border-top: 1px solid #ebe6dc; display: flex; gap: 8px; justify-content: flex-end; background: var(--bg); }
-.pop { position: fixed; width: 380px; background: var(--paper); border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.08), 0 16px 40px rgba(20,15,5,.22); border: 1px solid #ddd6c8; overflow: hidden; z-index: 40; }
+.pop { position: fixed; width: 400px; max-height: calc(100vh - 60px); overflow: auto; background: var(--paper); border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.08), 0 16px 40px rgba(20,15,5,.22); border: 1px solid #ddd6c8; overflow: hidden; z-index: 40; }
 .pop .sug { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 8px; cursor: default; }
 .pop .sug:hover { background: #f4f1ea; }
 .pop .sug.on { background: #eef2fa; }

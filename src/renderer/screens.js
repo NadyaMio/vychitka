@@ -346,7 +346,13 @@ async function renderDict() {
       <button class="btn ghost" data-act="rules-browser">${ic('book', 14)}Справочник правил</button><button class="btn" data-act="dict-import">${ic('upload', 14)}Импорт словаря…</button><button class="btn pri" data-act="bases-check">${ic(S.basesChecking ? 'spinner' : 'refresh', 14)}${S.basesChecking ? 'Проверяю…' : 'Проверить обновления'}</button></div>
     <div class="work"><div style="flex:1;padding:20px 28px;overflow:auto">${updBox}
       <div class="card-box" style="padding:4px 8px;border-radius:12px"><table><tr><th>База</th><th>Версия</th><th>Статус</th><th>Вкл.</th></tr>
-      ${mods.map(m => { const [pc, pt] = pillFor(m); return `<tr><td><b>${esc(m.title)}</b><small>${esc(m.detail || '')}</small></td><td style="color:var(--muted2)">${esc(m.version || '—')}</td><td><span class="pill ${pc}">${esc(pt)}</span></td>
+      ${mods.map(m => {
+        if (/nkr|corpus|ruscorp/i.test(m.id)) {
+          const on = S.nkrya && S.nkrya.connected;
+          return `<tr><td><b>Национальный корпус русского языка (НКРЯ)</b><small>${on ? 'Частотность и примеры употребления во вкладке «Корпус» карточки слова · через API ruscorpora.ru' : 'Частотность и примеры употребления · нужен личный токен НКРЯ и интернет'}</small></td><td style="color:var(--muted2)">API v1</td>
+            <td><span class="pill ${on ? 'g' : 'y'}">${on ? 'Подключён' : 'Нужен токен'}</span></td><td><button class="btn sm${on ? ' ghost' : ''}" data-act="nkrya-connect">${on ? 'Настроить' : 'Подключить'}</button></td></tr>`;
+        }
+        const [pc, pt] = pillFor(m); return `<tr><td><b>${esc(m.title)}</b><small>${esc(m.detail || '')}</small></td><td style="color:var(--muted2)">${esc(m.version || '—')}</td><td><span class="pill ${pc}">${esc(pt)}</span></td>
         <td><div class="tog${toggleable(m) ? (modOn(m) ? ' on' : '') : (m.status === 'link' || m.status === 'builtin' || m.status === 'on') ? ' on disabled' : ' disabled'}" data-module="${esc(m.id)}"></div></td></tr>`; }).join('')}</table></div>
       <div style="margin-top:14px;font-size:12.5px;color:#7d786d;line-height:1.5;display:flex;gap:8px">${ic('info', 15)}<span>Обновления баз приходят с GitHub отдельно от приложения — без отправки ваших текстов. Защищённые словари не скачиваются с сайтов: подключаются только по лицензии.</span></div></div>
       <div class="panel"><div class="ph"><h3>Мой словарь <small>${words.length} ${plural(words.length, ['слово', 'слова', 'слов'])}</small></h3>
@@ -413,7 +419,7 @@ async function openRule(n) {
   });
 }
 function openRulesBrowser() {
-  modal(`<div class="mh"><h2>Справочник правил</h2><p>Правила русской орфографии и пунктуации (1956) — по ним работает проверка. Поиск по тексту правил и примерам.</p></div>
+  modal(`<div class="mh"><h2>Справочник правил</h2><p>Правила русской орфографии и пунктуации (1956) и пособие по пунктуации — по ним работает проверка. Поиск по тексту правил и примерам.</p></div>
     <div class="mb"><input type="text" id="ruleQ" placeholder="Например: однородные члены, -тся, вводные слова, тире"><div id="ruleRes" style="max-height:48vh;overflow:auto;display:flex;flex-direction:column;gap:2px"></div></div>
     <div class="mf"><button class="btn" data-act="close">Закрыть</button></div>`, (ov, close) => {
     ov.querySelector('.modal').style.width = '680px';
@@ -424,10 +430,57 @@ function openRulesBrowser() {
       const my = ++seq;
       const list = q.value.trim() ? await window.api.engine('searchRules', q.value.trim(), 30) : [];
       if (my !== seq) return;
-      res.innerHTML = list.map(r => `<div class="nav" data-rule-n="${r.n}" style="white-space:normal;align-items:flex-start;flex-direction:column;gap:2px"><b style="font-size:13px">§ ${r.n}. ${esc(r.section)}</b><span style="font-size:12px;color:var(--muted2);line-height:1.45">${esc(r.snippet || '')}</span></div>`).join('')
+      res.innerHTML = list.map(r => `<div class="nav" ${r.n == null ? `data-manual-id="${esc(r.id)}"` : `data-rule-n="${r.n}"`} style="white-space:normal;align-items:flex-start;flex-direction:column;gap:2px"><b style="font-size:13px">${r.n == null ? `<span class="pill n" style="padding:1px 6px;font-size:10.5px;margin-right:4px">Пособие</span>` : `§ ${r.n}. `}${esc(r.section)}</b><span style="font-size:12px;color:var(--muted2);line-height:1.45">${esc(r.snippet || '')}</span></div>`).join('')
         || (q.value.trim() ? '<div class="empty">Ничего не найдено</div>' : '');
     };
     q.oninput = run;
-    res.onclick = e => { const it = e.target.closest('[data-rule-n]'); if (it) { close(); openRule(it.dataset.ruleN); } };
+    res.onclick = e => { const it = e.target.closest('[data-rule-n],[data-manual-id]'); if (!it) return; close(); if (it.dataset.manualId) openManualRule(it.dataset.manualId); else openRule(it.dataset.ruleN); };
+  });
+}
+
+// ============================================================ НКРЯ: подключение токена
+function openNkryaModal() {
+  const st0 = S.nkrya || {};
+  modal(`<div class="mh"><h2>Национальный корпус русского языка</h2><p>Корпус подключается по официальному API: приложение спрашивает частотность слова и примеры употребления, когда вы открываете вкладку «Корпус» в карточке слова. Ваши тексты в корпус не отправляются — только отдельные слова.</p></div>
+    <div class="mb">
+      <div style="font-size:13px;line-height:1.55">1. Войдите на <a data-act="nk-site" style="color:var(--navy);font-weight:600;cursor:pointer">ruscorpora.ru</a> (регистрация бесплатная).<br>2. В личном кабинете на вкладке «API» создайте токен — можно сделать его бессрочным.<br>3. Вставьте токен сюда.</div>
+      <input type="text" id="nkToken" placeholder="${st0.connected ? 'Токен сохранён — вставьте новый, чтобы заменить' : 'Токен НКРЯ'}" autocomplete="off" spellcheck="false">
+      <div id="nkMsg" style="font-size:12.5px;min-height:18px;color:var(--muted2)">${st0.connected ? `${ic('check', 12, 'var(--green)', 3)} Подключено${st0.checkedAt ? ' · проверено ' + new Date(st0.checkedAt).toLocaleDateString('ru-RU') : ''}. Токен хранится в зашифрованном виде.` : ''}</div>
+    </div>
+    <div class="mf">${st0.connected ? '<button class="btn ghost" data-act="nk-off" style="margin-right:auto">Отключить</button>' : ''}<button class="btn" data-act="nk-cancel">Закрыть</button><button class="btn pri" data-act="nk-go">${ic('check', 14, 'currentColor', 2.5)}Проверить и подключить</button></div>`, (ov, close) => {
+    const msg = ov.querySelector('#nkMsg');
+    ov.querySelector('[data-act=nk-site]').onclick = () => window.api.openExternal('https://ruscorpora.ru/accounts/profile/for-devs');
+    ov.querySelector('[data-act=nk-cancel]').onclick = close;
+    const off = ov.querySelector('[data-act=nk-off]');
+    if (off) off.onclick = async () => { S.nkrya = await window.api.nkryaDisconnect(); close(); toast('НКРЯ отключён'); if (S.screen === 'dict') renderDict(); };
+    const go = async () => {
+      const t = ov.querySelector('#nkToken').value.trim();
+      if (!t) { msg.textContent = 'Вставьте токен.'; return; }
+      msg.innerHTML = `${ic('spinner', 12)} Проверяю токен…`;
+      try {
+        S.nkrya = await window.api.nkryaConnect(t);
+        close(); toast('Национальный корпус подключён');
+        if (S.screen === 'dict') renderDict();
+      } catch (e) { msg.style.color = 'var(--red-ink)'; msg.textContent = String(e.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''); }
+    };
+    ov.querySelector('[data-act=nk-go]').onclick = go;
+    ov.querySelector('#nkToken').onkeydown = e => { if (e.key === 'Enter') go(); };
+  });
+}
+
+async function openManualRule(id) {
+  let r;
+  try { r = await window.api.engine('manualRule', id); } catch (e) { return fail(e); }
+  if (!r) return toast('Правило не найдено в базе', { error: true });
+  const exs = (r.examples || []).map(x => `<div style="font-family:'PT Serif',serif;font-style:italic;font-size:14px;color:var(--ink2);padding:2px 0 2px 12px;border-left:2px solid var(--line)">${esc(typeof x === 'string' ? x : x.text || '')}</div>`).join('');
+  const refs = (r.ref1956 || []).map(n => `<a data-ref="${n}" style="color:var(--navy);font-weight:600;cursor:pointer">§ ${n}</a>`).join(', ');
+  modal(`<div class="mh"><div class="label">Пособие по пунктуации</div><h2 style="margin-top:6px">${esc(r.section || r.title || '')}</h2></div>
+    <div class="mb" style="max-height:56vh;overflow:auto;user-select:text;gap:8px"><div style="font-size:13.5px;line-height:1.55">${esc(r.rule || r.text || '')}</div>${exs}
+      ${refs ? `<div style="font-size:12.5px;color:var(--muted2)">Правила 1956: ${refs}</div>` : ''}</div>
+    <div class="mf"><span style="font-size:11.5px;color:var(--muted3);margin-right:auto;align-self:center;max-width:300px">Пересказ «Вычитки» по пособию Е. П. Чечулиной «Пунктуация. Таблицы» (2020)</span><button class="btn ghost" data-act="pdf">${ic('ext', 14)}Пособие (PDF)</button><button class="btn pri" data-act="close">Понятно</button></div>`, (ov, close) => {
+    ov.querySelector('.modal').style.width = '640px';
+    ov.querySelector('[data-act=close]').onclick = close;
+    ov.querySelector('[data-act=pdf]').onclick = () => window.api.openExternal(r.url);
+    ov.querySelectorAll('[data-ref]').forEach(a => { a.onclick = () => { close(); openRule(a.dataset.ref); }; });
   });
 }
