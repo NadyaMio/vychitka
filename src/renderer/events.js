@@ -142,6 +142,7 @@ document.addEventListener('click', async e => {
     case 'save-profile': return saveProfileDialog();
     case 'run-check': return S.doc ? (show('doc', S.mode === 'diff' ? 'proof' : S.mode), runCheck()) : show('start');
     case 'toggle-quotes': return setSettings({ skipQuotes: !settings().skipQuotes });
+    case 'toggle-strict': return setSettings({ strict: !settings().strict });
     case 'toggle-lit': return setSettings({ literary: !settings().literary });
     case 'cmp-pick': return cmpPick(d.side);
     case 'cmp-show': return cmpShow();

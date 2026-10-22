@@ -11,6 +11,7 @@ const DEFAULT_SETTINGS = {
   numbers: true,
   uncertain: 'mark',
   skipQuotes: true,
+  strict: false,
 };
 
 const BUILTIN_PROFILES = [

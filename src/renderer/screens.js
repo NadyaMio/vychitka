@@ -147,7 +147,8 @@ function renderSettings() {
           ${sel('nbsp', 'Неразрывный пробел', [['prepositions-numbers', 'После предлогов и в числах'], ['numbers', 'Только в числах'], ['none', 'Не ставить']])}
           ${sel('numbers', 'Числа', [['true', '150 000 — пробел в разрядах'], ['false', 'Не менять']])}
           ${sel('uncertain', 'Спорные случаи', [['mark', 'Помечать «Проверьте»'], ['skip', 'Не показывать']])}
-          <div style="display:flex;align-items:center;padding:12px 0;font-size:13.5px;gap:10px;cursor:default" data-act="toggle-quotes"><div class="tog${s.skipQuotes ? ' on' : ''}"></div>Пропускать цитаты и прямую речь</div></div>
+          <div style="display:flex;align-items:center;padding:12px 0;font-size:13.5px;gap:10px;cursor:default;border-bottom:1px solid var(--line3)" data-act="toggle-quotes"><div class="tog${s.skipQuotes ? ' on' : ''}"></div>Пропускать цитаты и прямую речь</div>
+          <div style="display:flex;align-items:flex-start;padding:12px 0;font-size:13.5px;gap:10px;cursor:default" data-act="toggle-strict"><div class="tog${s.strict ? ' on' : ''}" style="margin-top:1px"></div><div>Строгий режим<small style="display:block;font-size:12px;color:var(--muted3);margin-top:2px">Больше подсказок по пунктуации, но среди них чаще встречаются лишние</small></div></div></div>
       </div></div>
     <div class="status"><span>${S.store.settingsDirty ? 'Профиль изменён · не сохранено' : `Профиль: ${esc(profileName())}`}</span><span class="r">Оценка времени: ${chars < 30000 ? 'меньше секунды' : `около ${Math.ceil(chars / 12000)} с`}</span></div>`;
   $('#main').querySelectorAll('select[data-norm]').forEach(el => el.onchange = () => {
