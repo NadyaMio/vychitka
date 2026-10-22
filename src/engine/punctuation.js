@@ -22,6 +22,9 @@ const NESMOTRYA_PRONOUNS = new Set(['я', 'ты', 'он', 'она', 'оно', '�
 const VERB_HEAD_POS = new Set(['VERB', 'INFN', 'GRND', 'PRTS', 'PRED']);
 const GEN_KOTORYJ = { 'которого': { nmbr: 'sing', gndr: ['masc', 'neut'] }, 'которой': { nmbr: 'sing', gndr: ['femn'] }, 'которых': { nmbr: 'plur', gndr: null } };
 const QUANTIFIERS = new Set(['многие', 'многих', 'один', 'одна', 'одно', 'одной', 'одного', 'одним', 'одну', 'одни', 'одних', 'несколько', 'некоторые', 'некоторых', 'каждый', 'каждая', 'каждое', 'каждого', 'каждую', 'каждой', 'каждому', 'часть', 'части', 'большинство', 'большинства', 'большая', 'половина', 'половину', 'треть', 'четверть', 'никто', 'ничто', 'никого', 'ничего', 'любой', 'любая', 'любое', 'любого', 'любому', 'любую', 'первый', 'первая', 'первое', 'первого', 'первую', 'последний', 'последняя', 'последнее', 'последнего', 'лучший', 'лучшая', 'лучшее', 'худший', 'оба', 'обе', 'обоих', 'обеих', 'все', 'всё', 'всех', 'кто-то', 'что-то', 'кое-кто', 'кое-что', 'остальные', 'остальных', 'прочие', 'иные', 'другие', 'другой', 'другая', 'другое', 'сотни', 'тысячи', 'десятки', 'миллионы', 'множество', 'большинству', 'меньшинство', 'мало', 'много', 'немногие', 'немало', 'единицы', 'ни', 'никакой', 'никакая', 'никакое', 'какой-то', 'какая-то', 'какое-то', 'какие-то']);
+const KTO_HEADS = new Set(['тот', 'та', 'те', 'тем', 'того', 'тех', 'всем', 'всех', 'всякого', 'всякий', 'всякому', 'каждого', 'каждый', 'каждому', 'любого', 'любой', 'любому', 'никого', 'никто', 'никому', 'первый', 'последний', 'единственный', 'единственным', 'единственного', 'таких', 'такие', 'такой']);
+const CHTO_HEADS = new Set(['всё', 'все', 'всего', 'всему', 'всем', 'то', 'того', 'тому', 'том', 'тем']);
+const COMPOUND_CONJ_PREPS = new Set(['несмотря', 'невзирая', 'на', 'из-за', 'ввиду', 'вследствие', 'благодаря', 'вопреки', 'в', 'силу', 'связи', 'с', 'независимо', 'от']);
 const IDIOM_KNOWS = new Set(['бог', 'чёрт', 'черт', 'кто', 'бес', 'пёс', 'пес', 'шут', 'леший', 'аллах', 'господь']);
 const COORD_BEFORE_INTRO = new Set(['а', 'и', 'но', 'да']);
 const PARTICLE_BEFORE_INTRO = new Set(['ну', 'уж', 'вот', 'ведь']);
@@ -166,7 +169,10 @@ function clauseHasVerb(ctx, sentence, wi) {
 }
 
 function hasNounReading(tok) {
-  return !!tok && tok.type === 'word' && morph.dictParses(tok.text).some((p) => p.tag.POS === 'NOUN');
+  if (!tok || tok.type !== 'word') return false;
+  const dict = morph.dictParses(tok.text);
+  if (dict.length) return dict.some((p) => p.tag.POS === 'NOUN');
+  return morph.parse(tok.text).some((p) => p.tag.POS === 'NOUN'); // unknown word («сексуализация»): the suffix predictor
 }
 
 /** Does any noun reading agree with the genitive form of «который» in number and gender? */
@@ -252,23 +258,24 @@ function subordinatingIssue(ctx, sentence, wi, conj) {
       const confidence = isHead(ctx, prevTok, conj.headPos) ? entry.confidence : 'check';
       return commaIssue(ctx, prevTok, anchor, 'punct.comma-before-conj', confidence, whyFor(entry, true, prepText), refFor(entry), undefined, { conj: entry.text });
     }
-    if (conj.stops.has(prevTok.lower)) {
-      // «то, что» is allowed unless «не то что»
-      if (!(prevTok.lower === 'то' && entry.text === 'что')) return null;
-    }
+    // «те, кто», «всем, кто», «всё, что», «то, что» — a demonstrative or «всё» heads the clause (§ 140); such heads are otherwise stop-words
+    const demonstrativeHead = (entry.text === 'кто' && KTO_HEADS.has(prevTok.lower)) || (entry.text === 'что' && CHTO_HEADS.has(prevTok.lower));
+    if (conj.stops.has(prevTok.lower) && !demonstrativeHead) return null;
     if (prevTok.lower === 'то' || prevTok.lower === 'того') {
       const beforeTo = ctx.prevTokenBefore(prevTok.start);
       if (beforeTo && beforeTo.type === 'word' && ['не', 'и', 'а', 'да'].includes(beforeTo.lower)) return null;
       if (prevTok.lower === 'то' && entry.text !== 'что' && !entry.formSet) return null; // «если …, то какое мне дело» — «то» of «если … то»
-      // «Несмотря на то что…», «Из-за того что…» at the start of a sentence (or after a comma / «и»): the compound conjunction is not split
-      if (entry.text === 'что' && beforeTo && beforeTo.type === 'word' && beforeTo.si === tok.si && isPrepLike(beforeTo, conj)) {
-        const b2 = ctx.prevTokenBefore(beforeTo.start);
+      // «Несмотря на то что…», «Из-за того что…», «Ввиду того что…» at the start of a sentence (or after a comma / «и»): the compound
+      // causal conjunction is not split there (§ 142). «За то, что…», «от того, что…» are not compound conjunctions and keep the comma.
+      if (entry.text === 'что' && beforeTo && beforeTo.type === 'word' && beforeTo.si === tok.si && COMPOUND_CONJ_PREPS.has(beforeTo.lower)) {
+        let b2 = ctx.prevTokenBefore(beforeTo.start);
+        if (b2 && b2.type === 'word' && b2.si === tok.si && COMPOUND_CONJ_PREPS.has(b2.lower)) b2 = ctx.prevTokenBefore(b2.start); // «несмотря на»
         if (!b2 || b2.si !== tok.si || b2.type === 'punct' || ['и', 'а', 'но'].includes(b2.lower)) return null;
       }
     }
     if (entry.skipIfPrev && entry.skipIfPrev.includes(prevTok.lower)) return null;
     if (conj.prepositions.has(prevTok.lower) && !entry.formSet) return null; // «о чём», «за что» – pronoun after preposition
-    if (question && !isVerbHead(prevTok)) return null; // «Это кто?», «Ты чем занимаешься?», «Тогда зачем?» — a question word, not a clause
+    if (question && !isVerbHead(prevTok) && !demonstrativeHead) return null; // «Это кто?», «Ты чем занимаешься?», «Тогда зачем?» — a question word, not a clause
     if (prevTok.lower === 'знает' || prevTok.lower === 'весть') {
       const b = ctx.prevTokenBefore(prevTok.start);
       if (b && b.type === 'word' && IDIOM_KNOWS.has(b.lower)) return null; // «бог знает сколько», «чёрт знает что»
@@ -288,19 +295,29 @@ function subordinatingIssue(ctx, sentence, wi, conj) {
         if (b && b.type === 'word' && b.si === tok.si && conj.prepositions.has(b.lower)) start = b;
         const beforeStart = ctx.prevTokenBefore(start.start);
         if (!beforeStart || beforeStart.si !== tok.si || beforeStart.type !== 'word') return null; // a comma (or the sentence start) already delimits the clause
+        // no verb between the previous mark and «которого» («…, главный тренер которого …», «…, желаемой тенденцией развития которого …»):
+        // the whole segment is the beginning of the relative clause, the mark before it already does the job
+        if (!clauseHasVerb(ctx, sentence, wi)) return null;
+        const phrase = ctx.text.slice(start.start, tok.end);
+        const shiftWhy = `Придаточное начинается с «${phrase}» — запятая ставится перед «${start.text}», а не перед «${tok.text}».`;
         if (!nounAgreesWithGen(prevTok, gen)) {
           // the noun cannot be the antecedent («президентом которой», «частях которого») — the possessive reading is certain
           if (conj.stops.has(beforeStart.lower)) return null;
-          const phrase = ctx.text.slice(start.start, tok.end);
           const confidence = isHead(ctx, beforeStart, conj.headPos) ? entry.confidence : 'check';
-          return commaIssue(ctx, beforeStart, start, 'punct.comma-before-conj', confidence, `Придаточное начинается с «${phrase}» — запятая ставится перед «${start.text}», а не перед «${tok.text}».`, refFor(entry), undefined, { conj: entry.text });
+          return commaIssue(ctx, beforeStart, start, 'punct.comma-before-conj', confidence, shiftWhy, refFor(entry), undefined, { conj: entry.text });
         }
-        // the noun agrees with «который»: either its antecedent («человека, которого») or a possessive («имён, которых») — let the editor decide
+        // the noun agrees with «который»: antecedent («человека, которого») or possessive («вождей, имён которых»). Two nouns in a row
+        // («вождей имён которых», «топик автором которого») point to the possessive reading — the first is the antecedent
+        if (hasNounReading(beforeStart) && !isVerbHead(beforeStart) && !isQuantifier(beforeStart) && !conj.stops.has(beforeStart.lower)) {
+          return commaIssue(ctx, beforeStart, start, 'punct.comma-before-conj', 'check', shiftWhy, refFor(entry), undefined, { conj: entry.text });
+        }
         return commaIssue(ctx, prevTok, tok, 'punct.comma-before-conj', 'check', `Перед «${tok.text}» начинается придаточное — нужна запятая. Если «${prevTok.text}» входит в придаточное («…, ${prevTok.text} ${tok.text}…»), запятая ставится перед ним.`, refFor(entry), undefined, { conj: entry.text });
       }
     }
     let confidence = entry.confidence || 'check';
     if (entry.needsHead && !isHead(ctx, prevTok, conj.headPos)) confidence = 'check';
+    if (demonstrativeHead) confidence = 'sure';
+    else if (entry.sureAfterVerb && !question && isVerbHead(prevTok)) confidence = 'sure'; // «знаю, кто», «скажи, когда», «понял, почему»
     return commaIssue(ctx, prevTok, tok, 'punct.comma-before-conj', confidence, whyFor(entry, false), refFor(entry), undefined, { conj: entry.text });
   }
   return null;
