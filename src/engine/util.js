@@ -98,6 +98,7 @@ function makeIssue(o) {
     ref: Array.isArray(o.ref) ? o.ref.slice() : [],
   };
   if (o.note) issue.note = o.note;
+  if (Array.isArray(o.manualRef) && o.manualRef.length) issue.manualRef = o.manualRef.slice(); // ids from reference/punct-manual.json
   if (o.meta) issue.meta = o.meta;
   if (o.metric) issue.metric = o.metric;
   return issue;

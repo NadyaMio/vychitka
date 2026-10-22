@@ -178,7 +178,7 @@ test('wordInfo: known and unknown words', async () => {
   assert.match(known.forms, /кр\. ф\./);
   assert.ok(known.morph.length >= 6 && known.morph.length <= 12);
   assert.ok(known.morph.every((m) => m.form && typeof m.tags === 'string'));
-  assert.equal(known.dal, null);
+  assert.ok(known.dal && known.dal.text && known.dal.url, 'Dal card is filled (see dal.test.js)');
   const unknown = engine.wordInfo('ответственых');
   assert.equal(unknown.known, false);
   assert.ok(unknown.suggestions.length > 0 && unknown.suggestions.length <= 5);

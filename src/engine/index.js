@@ -10,7 +10,7 @@
  *   literary(doc, settings)
  *   wordInfo(word, { para, start, end, doc })
  *   compare(aDoc, bDoc, { appliedFixes })
- *   rule(n), searchRules(query, limit)
+ *   rule(n), searchRules(query, limit), manualRule(id)
  *   applyNbsp(text), applyIssues(doc, issues), defaultSettings()
  */
 
@@ -18,6 +18,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const morph = require('./morph');
 const rules1956 = require('./rules1956');
+const punctManual = require('./punctmanual');
+const dal = require('./dal');
 const { buildContext } = require('./context');
 const spelling = require('./spelling');
 const punctuation = require('./punctuation');
@@ -119,6 +121,8 @@ async function init(opts = {}) {
   state.rules = loadRules(basesDir);
   const refFile = path.join(basesDir, 'reference', 'rules-1956.json');
   const refLoaded = rules1956.load(refFile);
+  punctManual.load(path.join(basesDir, 'reference', 'punct-manual.json'));
+  dal.configure(basesDir); // paths + meta.json only; the dictionary itself loads on the first word card
   const manifestFile = path.join(basesDir, 'manifest.json');
   state.manifest = fs.existsSync(manifestFile) ? loadJson(manifestFile) : null;
   state.basesDir = basesDir;
@@ -188,7 +192,12 @@ function validateDoc(doc, name = 'doc') {
 
 function finalizeIssue(issue) {
   issue.ref = rules1956.validRefs(issue.ref);
-  if (!issue.source) issue.source = issue.ref.length ? rules1956.source(issue.ref) : DEFAULT_SOURCE;
+  if (issue.manualRef !== undefined) {
+    issue.manualRef = punctManual.validRefs(issue.manualRef);
+    if (!issue.manualRef.length) delete issue.manualRef;
+  }
+  // source: «Правила 1956 · § N · Раздел» when there is a 1956 ref; otherwise the manual section; otherwise the rule's own source
+  if (!issue.source) issue.source = issue.ref.length ? rules1956.source(issue.ref) : issue.manualRef ? punctManual.source(issue.manualRef) : DEFAULT_SOURCE;
   else if (issue.ref.length && !/^Правила 1956/.test(issue.source)) issue.source = rules1956.source(issue.ref, issue.source);
   if (!Array.isArray(issue.alternatives)) issue.alternatives = [];
   return issue;
@@ -272,9 +281,33 @@ function rule(n) {
   return rules1956.rule(n);
 }
 
-/** Search the 1956 rules. */
+/**
+ * Search the 1956 rules and the punctuation manual together. Results are
+ * merged by score; on a tie the 1956 paragraph goes first. Manual entries
+ * have `n: null`, `id`, `source: 'manual'` and a `url` into the original PDF.
+ * @param {string} query
+ * @param {number} [limit=20]
+ * @returns {object[]}
+ */
 function searchRules(query, limit = 20) {
-  return rules1956.search(query, limit);
+  const lim = Math.max(1, limit | 0);
+  const a = rules1956.search(query, lim);
+  const b = punctManual.search(query, lim);
+  if (!b.length) return a;
+  if (!a.length) return b;
+  const merged = [];
+  let i = 0;
+  let j = 0;
+  while (merged.length < lim && (i < a.length || j < b.length)) {
+    if (j >= b.length || (i < a.length && a[i].score >= b[j].score)) merged.push(a[i++]);
+    else merged.push(b[j++]);
+  }
+  return merged;
+}
+
+/** Entry of the punctuation manual by id ('pm-dash-nouns' …), or null. */
+function manualRule(id) {
+  return punctManual.rule(id);
 }
 
 /**
@@ -292,6 +325,11 @@ function basesInfo() {
   const freqOk = !!dir && fs.existsSync(path.join(dir, 'freq', 'ru_50k.txt'));
   const extraOk = !!dir && fs.existsSync(path.join(dir, 'extra', 'words.txt'));
   const refInfo = rules1956.info();
+  const manualInfo = punctManual.info();
+  const dalInfo = dal.info();
+  const dalDetail = dalInfo.available
+    ? `${dalInfo.count.toLocaleString('ru-RU')} статей · 2-е издание · по Викитеке (CC BY-SA)`
+    : 'файл bases/dal/dal.json.gz не найден';
   const modules = [
     { id: 'spelling-opencorpora', title: 'Орфографический словарь (OpenCorpora)', detail: '389 022 лексемы · морфология Az.js', version, status: ok(azOk), bytes: dir ? fileSize(path.join(dir, 'az', 'words.dawg')) + fileSize(path.join(dir, 'az', 'paradigms.array')) : 0, toggle: true },
     { id: 'spelling-extra', title: 'Дополнительный словарь', detail: `${state.extraCount || 0} современных слов (референс, онбординг, дедлайн…)`, version, status: ok(extraOk), bytes: dir ? fileSize(path.join(dir, 'extra', 'words.txt')) : 0, toggle: true },
@@ -302,12 +340,13 @@ function basesInfo() {
     { id: 'typography-rules', title: 'Типографика', detail: 'тире, кавычки-ёлочки, разряды чисел, многоточие, буква ё', version, status: ok(!!state.rules), toggle: true },
     { id: 'kanc-style', title: 'Литературная правка: канцелярит и штампы', detail: `${counts.kanc || 0} шаблонов · ${counts.nominal || 0} пар «существительное → глагол» · ${counts.intensifiers || 0} усилителей`, version, status: ok(!!state.rules), toggle: true },
     { id: 'rules1956', title: 'Правила орфографии и пунктуации (1956)', detail: '203 параграфа · по публикации therules.ru', version: refInfo.retrieved || version, status: refInfo.loaded ? 'builtin' : 'missing', bytes: refInfo.file ? fileSize(refInfo.file) : 0, toggle: false },
+    { id: 'punct-manual', title: 'Пособие по пунктуации (таблицы, 2020)', detail: `${manualInfo.count || 0} правил в пересказе · ${manualInfo.compiler || 'Е. П. Чечулина'}, Ревдинский многопрофильный техникум · полный текст по ссылке`, version: manualInfo.retrieved || version, status: manualInfo.loaded ? 'builtin' : 'missing', bytes: manualInfo.file ? fileSize(manualInfo.file) : 0, toggle: false },
     { id: 'ozhegov', title: 'Толковый словарь Ожегова', detail: 'не входит в комплект — требуется лицензия правообладателя', version: '', status: 'license', toggle: false },
     { id: 'lopatin', title: 'Русский орфографический словарь (Лопатин)', detail: 'не входит в комплект — требуется лицензия правообладателя', version: '', status: 'license', toggle: false },
     { id: 'zaliznyak', title: 'Грамматический словарь Зализняка', detail: 'не входит в комплект — требуется лицензия правообладателя', version: '', status: 'license', toggle: false },
     { id: 'gramota', title: 'Грамота.ру', detail: 'справочный портал — открывается в браузере', version: '', status: 'link', toggle: false },
     { id: 'nkrya', title: 'Национальный корпус русского языка', detail: 'не подключён', version: '', status: 'missing', toggle: false },
-    { id: 'dal', title: 'Словарь Даля', detail: 'пока не встроен', version: '', status: 'missing', toggle: false },
+    { id: 'dal', title: 'Толковый словарь Даля', detail: dalDetail, version: dalInfo.retrieved || version, status: dalInfo.available ? 'builtin' : 'missing', bytes: dalInfo.bytes, toggle: false },
   ];
   return { version, date, modules };
 }
@@ -322,6 +361,7 @@ module.exports = {
   compare,
   rule,
   searchRules,
+  manualRule,
   applyNbsp: typography.applyNbsp,
   applyIssues: applyIssuesImpl,
   defaultSettings,

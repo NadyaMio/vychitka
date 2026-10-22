@@ -781,6 +781,15 @@ async function addUserWord(word) {
 }
 
 // ---------- word popover (spelling) ----------
+// The article text repeats the headword; show it once (comparison ignores stress marks and old letters).
+function dalBody(d) {
+  const norm = t => t.normalize('NFD').replace(/[\u0300\u0301]/g, '').normalize('NFC').toLowerCase().replace(/ѣ/g, 'е').replace(/[іѵ]/g, 'и').replace(/ъ(?=[\s,.;:]|$)/g, '');
+  const text = d.text || '', head = (d.word || '').trim();
+  if (!head) return text;
+  const words = head.split(/\s+/).length;
+  const lead = text.split(/\s+/).slice(0, words).join(' ');
+  return norm(lead).replace(/[,.;:]+$/, '') === norm(head).replace(/[,.;:]+$/, '') ? text.split(/\s+/).slice(words).join(' ') : text;
+}
 let popEl = null;
 function closePop() { if (popEl) { popEl.remove(); popEl = null; } }
 async function openWordPop(issue, anchor) {
@@ -804,7 +813,12 @@ async function openWordPop(issue, anchor) {
     if (corpus) return;
     if (!(S.nkrya && S.nkrya.connected)) { corpus = { off: true }; return draw(); }
     corpus = { loading: true }; draw();
-    try { corpus = { data: await window.api.nkryaPortrait(lemma) }; } catch (e) { corpus = { error: String(e.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '') }; }
+    try {
+      // the corpus wants a dictionary form: for a misspelled word take the lemma of the best suggestion
+      let lem = lemma;
+      if (!(info && info.known && info.lemma) && sugg[0]) { try { const i2 = await window.api.engine('wordInfo', sugg[0].word); if (i2 && i2.lemma) lem = i2.lemma; } catch { /* keep the form */ } }
+      corpus = { data: await window.api.nkryaPortrait(lem) };
+    } catch (e) { corpus = { error: String(e.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '') }; }
     if (popEl) draw();
   };
   const corpusHtml = () => {
@@ -820,7 +834,7 @@ async function openWordPop(issue, anchor) {
   const tabHtml = () => {
     if (tab === 'corpus') return corpusHtml();
     if (tab === 'morph') return info && info.morph && info.morph.length ? info.morph.slice(0, 10).map(m => `<div style="display:flex;gap:8px"><b style="font-family:'PT Serif',serif;font-size:13.5px;min-width:120px">${esc(m.form)}</b><span style="color:var(--muted2)">${esc(m.tags)}</span></div>`).join('') : '<span style="color:var(--muted2)">Морфологических данных нет.</span>';
-    if (tab === 'dal') return info && info.dal ? `<div style="max-height:180px;overflow:auto;user-select:text"><b style="font-family:'PT Serif',serif;font-size:14px">${esc(info.dal.word || '')}</b> ${esc(info.dal.text || '')}</div>${info.dal.url ? `<div style="margin-top:6px"><a data-popact="dal-open" style="color:var(--navy);font-weight:600;cursor:pointer">Открыть на Викитеке</a></div>` : ''}` : '<span style="color:var(--muted2)">В словаре Даля такого слова нет.</span>';
+    if (tab === 'dal') return info && info.dal ? `${info.dal.approx ? '<div style="font-size:11.5px;color:var(--muted3);margin-bottom:4px">Отдельной статьи нет — ближайшее гнездо слов у Даля</div>' : ''}<div style="max-height:180px;overflow:auto;user-select:text"><b style="font-family:'PT Serif',serif;font-size:14px">${esc(info.dal.word || '')}</b> ${esc(dalBody(info.dal))}</div>${info.dal.url ? `<div style="margin-top:6px"><a data-popact="dal-open" style="color:var(--navy);font-weight:600;cursor:pointer">Открыть на Викитеке</a></div>` : ''}` : '<span style="color:var(--muted2)">В словаре Даля такого слова нет.</span>';
     return info && (info.forms || info.rule) ? `${info.forms ? `<b style="font-family:'PT Serif',serif;font-size:14px">${esc(info.forms)}</b><br>` : ''}${info.rule ? `<span style="color:var(--muted2)">Правило: ${esc(info.rule)}</span>` : ''}` : `<span style="color:var(--muted2)">${esc(issue.why || '')}</span>`;
   };
   const draw = () => {
@@ -829,7 +843,7 @@ async function openWordPop(issue, anchor) {
       <div style="font-size:12px;color:var(--muted3);margin-top:2px">${info && info.known ? 'Слово есть в словаре, но здесь, вероятно, ошибка' : 'Нет в словаре'} · похожие слова с учётом падежа в предложении</div></div>
       <div style="padding:6px 8px">${sugg.slice(0, 3).map((s, k) => `<div class="sug${k === 0 ? ' on' : ''}" data-pick="${esc(s.word)}"><span class="w">${shown(s.word)}</span><small>${esc(s.note || '')}${s.fits && s.note ? ' — подходит' : ''}</small><span class="sp1"></span><span class="kbd">${k + 1}</span></div>`).join('')}</div>
       <div style="margin:0 12px;padding:12px;background:var(--bg);border-radius:10px;font-size:12.5px;line-height:1.55;color:var(--ink2)">
-        <div style="display:flex;gap:5px;margin-bottom:8px;flex-wrap:wrap">${[['orth', 'Орфографический'], ['dal', 'Толковый (Даль)'], ['morph', 'Морфология'], ['corpus', 'Корпус']].map(([k, t]) => `<span class="chip${tab === k ? ' on' : ''}" data-tab="${k}" style="height:22px;font-size:11px">${t}</span>`).join('')}</div>${tabHtml()}</div>
+        <div style="display:flex;gap:5px;margin-bottom:8px;flex-wrap:wrap">${[['orth', 'Орфографический'], ['dal', 'Толковый (Даль)'], ['morph', 'Морфология'], ['corpus', 'Корпус']].map(([k, t]) => `<span class="chip${tab === k ? ' on' : ''}" data-tab="${k}" style="height:22px;font-size:10.5px;padding:0 7px">${t}</span>`).join('')}</div>${tabHtml()}</div>
       <div style="padding:12px;display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm ok" data-pick="${esc(sugg[0] ? sugg[0].word : issue.after)}">${ic('check', 13, 'currentColor', 2.5)}Заменить</button>
         <button class="btn sm" data-popact="addword">${ic('plus', 13)}В мой словарь</button><button class="btn sm ghost" data-popact="ignore">Игнорировать</button><span class="sp1"></span>
         <button class="btn sm ghost" data-popact="gramota">${ic('ext', 13)}Грамота.ру</button></div>`;
@@ -840,6 +854,9 @@ async function openWordPop(issue, anchor) {
   popEl.style.left = Math.min(window.innerWidth - 400, Math.max(240, r.left - 40)) + 'px';
   popEl.style.top = (r.bottom + h + 12 < window.innerHeight ? r.bottom + 8 : Math.max(50, r.top - h - 8)) + 'px';
   popEl.addEventListener('click', e => {
+    // the popover redraws itself on tab switch; keep the click from reaching the document handler, which would see
+    // a detached target and treat it as a click outside
+    e.stopPropagation();
     const t = e.target.closest('[data-tab],[data-pick],[data-popact]');
     if (!t) return;
     if (t.dataset.tab) { tab = t.dataset.tab; draw(); if (tab === 'corpus') loadCorpus(); return; }

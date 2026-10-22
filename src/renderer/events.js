@@ -28,7 +28,7 @@ function navigate(nav, recent) {
 document.addEventListener('click', async e => {
   if (e.target.closest('#side [data-nav], #side [data-recent]')) return; // handled on pointerdown
   const t = e.target.closest('[data-nav],[data-recent],[data-act],[data-mode],[data-startmode],[data-filter],[data-key],[data-litkey],[data-check],[data-profile],[data-delprofile],[data-cmpmode],[data-cmpfilter],[data-diff],[data-module],[data-delword]');
-  if (popEl && !e.target.closest('.pop') && !e.target.closest('.m')) closePop();
+  if (popEl && e.target.isConnected && !e.target.closest('.pop') && !e.target.closest('.m')) closePop();
   if (!t) return;
   const d = t.dataset;
 

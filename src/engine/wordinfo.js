@@ -7,8 +7,10 @@
  */
 
 const morph = require('./morph');
+const dal = require('./dal');
 
 const MAX_SUGGESTIONS = 5;
+const DAL_EXCERPT = 1200;
 
 const RULE_BY_KIND = {
   nn: 'В прилагательных с суффиксами -енн-, -онн- и в страдательных причастиях прошедшего времени пишутся две «н».',
@@ -125,6 +127,19 @@ function predictedFor(word) {
 }
 
 /**
+ * Dal's article for the card: { word: head, text (≈1200 chars, cut at a sentence), url,
+ * approx? } or null; `approx: true` marks the nearest nest found by prefix rather than an
+ * exact headword. The dictionary is loaded lazily on the first call.
+ */
+function dalCard(word, lemma) {
+  const hit = dal.lookup(word, lemma);
+  if (!hit) return null;
+  const card = { word: hit.head, text: dal.excerpt(hit.text, DAL_EXCERPT), url: hit.url };
+  if (hit.approx) card.approx = true;
+  return card;
+}
+
+/**
  * Build the word card.
  * @param {string} word
  * @param {{ para?:number, start?:number, end?:number, doc?:object }} [opts]
@@ -191,6 +206,7 @@ function wordInfo(word, opts = {}) {
       }
     }
   }
+  info.dal = dalCard(clean, lemma);
   return info;
 }
 

@@ -57,6 +57,7 @@ function load(file) {
     state.paragraphs.push(p);
     state.byN.set(p.n, p);
     state.index.push({
+      key: p.n,
       n: p.n,
       title: norm(p.section || ''),
       parts: (p.parts || []).map((part) => ({ t: part.t, text: part.text, norm: norm(part.text) })),
@@ -81,14 +82,16 @@ function rule(n) {
 }
 
 /**
- * Full-text search over rules and examples.
- * Ranking: matches in the rule part weigh more than in examples; paragraphs
- * containing every query word rank above partial matches.
+ * Rank index entries against a query. An entry is { key, title, parts: [{ t, text, norm }] };
+ * the same ranking serves the 1956 rules and the punctuation manual (punctmanual.js).
+ * Ranking: matches in the rule part weigh more than in examples; entries
+ * containing every query word rank above partial matches; the title is the
+ * strongest signal. Ties keep index order.
+ * @param {Array<{key:any, title:string, parts:Array<{t:string,text:string,norm:string}>}>} index
  * @param {string} query
- * @param {number} [limit=20]
- * @returns {Array<{n:number, section:string, group:string, url:string, snippet:string, score:number}>}
+ * @returns {Array<{key:any, score:number, snippet:string}>} sorted by score, best first
  */
-function search(query, limit = 20) {
+function rankEntries(index, query) {
   const q = norm(query || '');
   if (!q) return [];
   const words = [...new Set(q.split(' ').filter(Boolean))];
@@ -99,7 +102,7 @@ function search(query, limit = 20) {
     ? (text, from) => { const re = new RegExp(`(?:^| )${w}(?= |$)`, 'g'); re.lastIndex = from; const mm = re.exec(text); return mm ? mm.index + (mm[0].startsWith(' ') ? 1 : 0) : -1; }
     : (text, from) => text.indexOf(w, from));
   const results = [];
-  for (const entry of state.index) {
+  for (const entry of index) {
     let score = 0;
     let matchedWords = 0;
     let snippetPart = null;
@@ -142,18 +145,28 @@ function search(query, limit = 20) {
         }
       }
     }
-    const p = state.byN.get(entry.n);
     results.push({
-      n: entry.n,
-      section: p.section,
-      group: p.group,
-      url: p.url,
+      key: entry.key,
       snippet: makeSnippet(snippetPart ? snippetPart.text : '', snippetPos, words[0]),
       score: Math.round(score * 10) / 10,
     });
   }
-  results.sort((a, b) => b.score - a.score || a.n - b.n);
-  return results.slice(0, Math.max(1, limit | 0));
+  results.sort((a, b) => b.score - a.score); // stable: ties keep index order (§ ascending)
+  return results;
+}
+
+/**
+ * Full-text search over rules and examples (see rankEntries for the ranking).
+ * @param {string} query
+ * @param {number} [limit=20]
+ * @returns {Array<{n:number, section:string, group:string, url:string, snippet:string, score:number}>}
+ */
+function search(query, limit = 20) {
+  const ranked = rankEntries(state.index, query);
+  return ranked.slice(0, Math.max(1, limit | 0)).map((r) => {
+    const p = state.byN.get(r.key);
+    return { n: p.n, section: p.section, group: p.group, url: p.url, snippet: r.snippet, score: r.score };
+  });
 }
 
 function makeSnippet(text, approxPos, word) {
@@ -195,4 +208,4 @@ function info() {
   };
 }
 
-module.exports = { load, rule, search, source, has, validRefs, info, norm };
+module.exports = { load, rule, search, rankEntries, source, has, validRefs, info, norm };

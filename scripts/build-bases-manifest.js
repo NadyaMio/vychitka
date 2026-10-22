@@ -22,6 +22,7 @@ const MODULES = [
   { id: 'spelling-extra', title: 'Дополнительный словарь', dir: 'extra', license: 'проект «Вычитка»' },
   { id: 'rules', title: 'Правила проверки (данные)', dir: 'rules', license: 'проект «Вычитка»' },
   { id: 'rules1956', title: 'Правила орфографии и пунктуации (1956)', dir: 'reference', license: 'официальный нормативный документ · публикация therules.ru' },
+  { id: 'dal', title: 'Толковый словарь Даля (2-е издание)', dir: 'dal', license: 'текст — общественное достояние · оцифровка Викитеки — CC BY-SA 4.0' },
 ];
 
 function parseArgs(argv) {

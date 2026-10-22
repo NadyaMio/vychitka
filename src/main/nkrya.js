@@ -65,7 +65,7 @@ class Nkrya {
     return { connected: !!this._token(), checkedAt: v.checkedAt || null, user: v.user || null };
   }
 
-  async _get(route, token, params) {
+  async _get(route, token, params, retried = false) {
     const url = `${API}${route}${params ? '?' + new URLSearchParams(params) : ''}`;
     let res;
     try {
@@ -74,7 +74,11 @@ class Nkrya {
       throw new NkryaError('Нет связи с НКРЯ. Проверьте интернет — остальная проверка работает без него.');
     }
     if (res.status === 401 || res.status === 403) throw new NkryaError('НКРЯ не принял токен. Создайте новый в личном кабинете ruscorpora.ru и подключите снова.');
-    if (res.status === 429) throw new NkryaError('НКРЯ просит подождать: слишком много запросов. Попробуйте через минуту.');
+    if (res.status === 429) {
+      const wait = Number(res.headers.get('retry-after'));
+      if (!retried && wait > 0 && wait <= 10) { await new Promise(r => setTimeout(r, wait * 1000)); return this._get(route, token, params, true); }
+      throw new NkryaError('НКРЯ просит подождать: слишком много запросов. Попробуйте через минуту.');
+    }
     if (!res.ok) throw new NkryaError(`НКРЯ ответил ошибкой ${res.status}.`);
     return res.json();
   }

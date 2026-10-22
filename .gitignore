@@ -7,3 +7,5 @@ test/e2e/out/
 *.blockmap
 .DS_Store
 exp*.cjs
+.cache/
+__pycache__/
