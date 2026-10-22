@@ -41,6 +41,7 @@ const DEFAULT_SETTINGS = Object.freeze({
   numbers: true,
   uncertain: 'mark',
   skipQuotes: true,
+  strict: false, // «Строгий режим»: picky-правила LanguageTool и шумные вводные слова (intro.json → strict: true)
 });
 
 const CHECK_RANK = { spelling: 5, grammar: 4, punctuation: 3, typography: 2, repeat: 1 };

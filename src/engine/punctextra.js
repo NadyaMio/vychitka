@@ -1237,6 +1237,141 @@ function isolatedObject(ctx, sentence, wi, X, out) {
   }));
 }
 
+/* ---------- 10. compound sentence: «…, и он …» ---------- */
+
+const CLAUSE_OPENERS = new Set(['что', 'кто', 'который', 'которая', 'которое', 'которые', 'которого', 'которую', 'которым', 'которой', 'которых', 'где', 'когда', 'как', 'почему', 'зачем', 'чей', 'если', 'чтобы', 'чтоб', 'пока', 'хотя', 'куда', 'откуда', 'сколько', 'пусть', 'пускай', 'будто', 'словно', 'ибо', 'поскольку', 'едва', 'лишь', 'чем', 'какой', 'какая', 'какое', 'какие', 'кем', 'кого', 'кому', 'чего', 'чему', 'чём', 'ли', 'раз', 'коли', 'ежели', 'дабы']);
+const AND_SKIP_AFTER = new Set(['потом', 'затем', 'тогда', 'тут', 'там', 'вот', 'вдруг', 'сразу', 'уже', 'ещё', 'еще', 'даже', 'только', 'всё', 'все', 'снова', 'опять', 'теперь', 'сейчас', 'здесь', 'тоже', 'также', 'поэтому', 'потому', 'значит', 'наконец', 'вообще', 'главное', 'правда', 'конечно', 'вроде', 'как-то', 'однажды', 'скоро', 'вскоре', 'вечером', 'утром', 'ночью', 'днём', 'днем', 'завтра', 'вчера', 'сегодня', 'иногда', 'часто', 'редко', 'всегда', 'никогда', 'обычно', 'внезапно', 'неожиданно', 'немедленно', 'быстро', 'медленно', 'тихо', 'громко', 'весело', 'грустно', 'хорошо', 'плохо', 'совсем', 'почти', 'просто', 'именно', 'пусть', 'пускай']);
+const PRED_SKIP = new Set(['не', 'уже', 'ещё', 'еще', 'тоже', 'также', 'сразу', 'потом', 'затем', 'тогда', 'снова', 'опять', 'всё', 'все', 'очень', 'совсем', 'почти', 'просто', 'даже', 'только', 'вдруг', 'тут', 'там', 'уж', 'же', 'ли', 'бы', 'б', 'сам', 'сама', 'сами', 'само', 'вот', 'так', 'как-то', 'быстро', 'тихо', 'внезапно', 'долго', 'немного', 'много', 'мало', 'лишь', 'тоже', 'конечно', 'наверное', 'кажется', 'вообще', 'никак', 'никогда', 'всегда', 'часто', 'иногда', 'обычно', 'редко', 'наконец', 'спокойно', 'медленно', 'громко', 'молча', 'сейчас', 'теперь', 'сегодня', 'завтра', 'вчера',
+  'мне', 'тебе', 'ему', 'ей', 'нам', 'вам', 'им', 'меня', 'тебя', 'его', 'её', 'ее', 'нас', 'вас', 'их', 'себе', 'себя', 'мной', 'тобой', 'ним', 'ней', 'ними', 'нему', 'нею', 'всем', 'всех', 'это', 'этого', 'этому', 'этим', 'того', 'тому', 'тем', 'туда', 'сюда', 'оттуда', 'домой', 'здесь', 'дома',
+  'давно', 'постоянно', 'впервые', 'наверняка', 'действительно', 'вместе', 'сначала', 'потихоньку', 'тихонько', 'прямо', 'ещё', 'еле', 'едва', 'почему-то', 'зачем-то', 'как-то', 'куда-то', 'где-то', 'точно', 'явно', 'честно', 'искренне', 'серьёзно', 'серьезно', 'вроде', 'типа', 'реально', 'буквально', 'окончательно', 'полностью', 'слегка', 'чуть', 'резко', 'сильно', 'ужасно', 'страшно', 'жутко', 'дико']);
+
+/** Word and number tokens of the segment ending right before token `tok`, back to the previous punctuation mark (nearest first reversed to text order). */
+function segmentBefore(ctx, tok, max) {
+  const out = [];
+  for (let i = tok.i - 1; i >= 0 && out.length <= max; i--) {
+    const t = ctx.tokens[i];
+    if (t.type === 'space') continue;
+    if (t.si !== tok.si || t.type === 'punct') break;
+    out.unshift(t);
+  }
+  return out;
+}
+const PRONOUN_AGREE = { 'я': { per: '1per', nmbr: 'sing' }, 'ты': { per: '2per', nmbr: 'sing' }, 'он': { per: '3per', nmbr: 'sing', gndr: 'masc' }, 'она': { per: '3per', nmbr: 'sing', gndr: 'femn' }, 'оно': { per: '3per', nmbr: 'sing', gndr: 'neut' }, 'мы': { per: '1per', nmbr: 'plur' }, 'вы': { per: '2per', nmbr: 'plur' }, 'они': { per: '3per', nmbr: 'plur' } };
+
+/** Finite verb (or short predicate) at sentence word index k that agrees with the subject features; returns the token or null. */
+function agreeingPredicate(ctx, sentence, k, feat) {
+  const words = sentence.words;
+  let seen = 0;
+  for (let j = k; j < words.length && seen < 4; j++, seen++) {
+    const t = ctx.tokens[words[j]];
+    if (j > k && !adjacentTokens(ctx, ctx.tokens[words[j - 1]], t)) return null;
+    if (PRED_SKIP.has(t.lower)) continue;
+    const ps = parsesOf(t);
+    if (!ps.length) return null;
+    const verbs = ps.filter((p) => p.tag.POS === 'VERB');
+    if (verbs.length && (verbs.length === ps.length || verbs.some((p) => p.score >= 0.5))) {
+      const ok = verbs.some((p) => {
+        if (p.tag.impr || p.tag.MOOd === 'impr') return false;
+        if (feat.nmbr && p.tag.NMbr && p.tag.NMbr !== feat.nmbr) return false;
+        if (p.tag.TEns === 'past') return !(feat.gndr && p.tag.NMbr === 'sing' && p.tag.GNdr && p.tag.GNdr !== feat.gndr);
+        if (feat.per && p.tag.PErs && p.tag.PErs !== feat.per) return false;
+        return true;
+      });
+      return ok ? { tok: t, kind: 'verb' } : null;
+    }
+    if (ps.every((p) => ['ADJS', 'PRTS', 'PRED'].includes(p.tag.POS))) return { tok: t, kind: 'short' }; // «и он рад», «и всё было решено»
+    return null;
+  }
+  return null;
+}
+
+const INDEF_SUBJECTS = {
+  'никто': { nmbr: 'sing', gndr: 'masc', per: '3per' }, 'ничто': { nmbr: 'sing', gndr: 'neut', per: '3per' }, 'кто-то': { nmbr: 'sing', gndr: 'masc', per: '3per' },
+  'что-то': { nmbr: 'sing', gndr: 'neut', per: '3per' }, 'кто-нибудь': { nmbr: 'sing', gndr: 'masc', per: '3per' }, 'кое-кто': { nmbr: 'sing', gndr: 'masc', per: '3per' },
+  'все': { nmbr: 'plur', per: '3per' }, 'всё': { nmbr: 'sing', gndr: 'neut', per: '3per' }, 'каждый': { nmbr: 'sing', gndr: 'masc', per: '3per' },
+  'многие': { nmbr: 'plur', per: '3per' }, 'некоторые': { nmbr: 'plur', per: '3per' }, 'остальные': { nmbr: 'plur', per: '3per' },
+};
+
+/** Subject right after «и» at sentence word index k: personal pronoun, «это», indefinite pronoun, nominative-only noun (with one modifier) or a capitalised name. */
+function subjectAt(ctx, sentence, k) {
+  const words = sentence.words;
+  const t = ctx.tokens[words[k]];
+  if (!t) return null;
+  if (PERSONAL.has(t.lower)) return { end: k, feat: PRONOUN_AGREE[t.lower], kind: 'pronoun' };
+  if (t.lower === 'это') return { end: k, feat: { nmbr: 'sing', gndr: 'neut', per: '3per' }, kind: 'eto' };
+  if (INDEF_SUBJECTS[t.lower]) return { end: k, feat: INDEF_SUBJECTS[t.lower], kind: 'indef' };
+  if (t.type !== 'word' || hasPos(t, 'PREP') || hasPos(t, 'CONJ') || hasPos(t, 'PRCL')) return null;
+  let i = k;
+  let head = t;
+  const next = ctx.tokens[words[k + 1]];
+  if (next && adjacentTokens(ctx, t, next) && isAdjOnly(t) && nounParses(next).length && agrees(next, t, 'ADJF')) { i = k + 1; head = next; }
+  if (isProperNom(head) || (isNomOnlyNoun(head) && !hasPos(head, 'ADVB') && !isVerbLike(head))) {
+    const feat = { per: '3per' };
+    const ns = nounParses(head).filter((p) => p.tag.CAse === 'nomn');
+    if (ns.length) { feat.nmbr = ns[0].tag.NMbr; if (ns[0].tag.NMbr === 'sing') feat.gndr = ns[0].tag.GNdr; }
+    return { end: i, feat, kind: 'noun' };
+  }
+  return null;
+}
+
+/**
+ * «Поговорила с директором и он обещал позвонить» → «директором, и он обещал»: «и» joins two clauses with their own
+ * subjects — a compound sentence (§ 137). Left part: a clause with a finite verb that is not a subordinate clause
+ * sharing its conjunction with the right part («когда он пришёл и мы сели»). Right part: subject + agreeing predicate.
+ * Questions and exclamations are skipped (§ 137 note: «Кто ты и что тебе нужно?»).
+ */
+function compoundAnd(ctx, sentence, wi, out) {
+  const words = sentence.words;
+  const tok = ctx.tokens[words[wi]];
+  if (tok.lower !== 'и' || tok.cap) return;
+  const prev = ctx.prevTokenBefore(tok.start);
+  if (!prev || prev.si !== tok.si || (prev.type !== 'word' && prev.type !== 'num')) return; // a mark already stands before «и»
+  if (COORD.has(prev.lower) || prev.lower === 'как' || prev.lower === 'так' || prev.lower === 'также' || prev.lower === 'тоже') return;
+  if (sentenceEndsWith(ctx, sentence, ['?', '!'])) return;
+  // left clause: back to the previous mark (numbers count as words: «мне было 16 и я…»); must contain a finite verb and must not open with a subordinator
+  const left = segmentBefore(ctx, tok, 20);
+  if (!left.length || left.length > 20) return;
+  const leftStart = left[0];
+  if (CLAUSE_OPENERS.has(leftStart.lower) || leftStart.lower === 'и' || leftStart.lower === 'ни') return;
+  if (left.some((t) => CLAUSE_OPENERS.has(t.lower) && t !== leftStart && ['кто', 'что', 'который', 'которые', 'которая', 'которое', 'где', 'когда', 'если', 'чтобы', 'пока', 'хотя', 'как'].includes(t.lower))) return; // a subordinate clause without its comma inside the left part — too unclear
+  const leftVerb = left.find((t) => isFiniteVerb(t) && !hasPos(t, 'GRND') && !isImperative(t));
+  if (!leftVerb) return;
+  if (left.some((t) => t.lower === 'и' || t.lower === 'ни') && !PERSONAL.has(left[0].lower)) return; // «и X и Y» rows / repeated conjunctions — leave to the repeated-conjunction rule
+  // right clause: [adverb] subject + predicate
+  let k = wi + 1;
+  let first = ctx.tokens[words[k]];
+  if (!first || !adjacentTokens(ctx, tok, first)) return;
+  let adverbBefore = false;
+  if (AND_SKIP_AFTER.has(first.lower)) { adverbBefore = true; k++; first = ctx.tokens[words[k]]; if (!first || !adjacentTokens(ctx, ctx.tokens[words[k - 1]], first)) return; }
+  // «и вот в выходные я откопал», «и через час мы уехали» — one short prepositional phrase before the subject
+  if (hasPos(first, 'PREP') && !nounParses(first).length) {
+    for (let j = k + 1; j <= k + 3 && j < words.length; j++) {
+      const t = ctx.tokens[words[j]];
+      if (!adjacentTokens(ctx, ctx.tokens[words[j - 1]], t)) return;
+      if (PERSONAL.has(t.lower) || INDEF_SUBJECTS[t.lower] || t.lower === 'это') { adverbBefore = true; k = j; first = t; break; }
+      if (!(nounParses(t).length || isAdjOnly(t) || t.type === 'num')) return;
+    }
+    if (first !== ctx.tokens[words[k]]) return;
+    if (!adverbBefore || k === wi + 1) return;
+  }
+  const subj = subjectAt(ctx, sentence, k);
+  if (!subj) return;
+  const pred = agreeingPredicate(ctx, sentence, subj.end + 1, subj.feat);
+  if (!pred) return;
+  if (subj.kind === 'eto' && pred.kind !== 'verb' && !['было', 'будет', 'стало', 'значит', 'есть'].includes(pred.tok.lower)) return;
+  // the same pronoun as the left subject right before the verb («он встал и он же сел») is fine, but «и» + object pronoun is not a subject — handled by PERSONAL (nominative forms only)
+  const sure = subj.kind === 'pronoun' && !adverbBefore && pred.kind === 'verb' && pred.tok.i === ctx.tokens[words[subj.end + 1]].i
+    && left.length >= 2 && (PERSONAL.has(leftStart.lower) || left.some((t) => isNomOnlyNoun(t) || isProperNom(t)) || isFiniteVerb(leftStart));
+  out.push(commaAfter(ctx, prev, tok, {
+    ruleId: 'punct.comma-compound-and',
+    confidence: sure ? 'sure' : 'check',
+    ref: [137],
+    manualRef: ['pm-ssp-comma', 'pm-ssp-no-comma'],
+    why: `«И» соединяет два предложения со своими подлежащими («…${ctx.text.slice(tok.start, pred.tok.end)}…»): между частями сложносочинённого предложения ставится запятая. Запятая не нужна, если у частей есть общий второстепенный член («Вчера шёл дождь и дул ветер») или это однородные сказуемые.`,
+    meta: { conj: 'и' },
+  }));
+}
+
 /* ---------- entry point ---------- */
 
 /**
@@ -1263,6 +1398,7 @@ function check(ctx, out) {
       doubleConj(ctx, sentence, wi, X, out);
       if (wi === 0) continue;
       generalizingDash(ctx, sentence, wi, X, out);
+      compoundAnd(ctx, sentence, wi, out);
       kakIssue(ctx, sentence, wi, X, conj, out);
       gerundMid(ctx, sentence, wi, X, out);
       participleAfterNoun(ctx, sentence, wi, X, out);

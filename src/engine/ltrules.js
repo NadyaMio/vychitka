@@ -148,6 +148,7 @@ function ltTagsOfTag(tag, lemmaHint = '') {
 
 const state = {
   rules: [],          // compiled, enabled rules
+  strictRules: [],    // picky rules of LanguageTool: added in the strict mode only (settings.strict), always `check`
   all: [],            // compiled rules including disabled (for calibration)
   byKey: new Map(),
   parenthetical: new Set(),
@@ -333,6 +334,8 @@ function compileRule(r) {
         enabled: status.enabled !== false,
         confidence: status.confidence === 'sure' ? 'sure' : 'check',
         picky: Array.isArray(r.ltTags) && r.ltTags.includes('picky'),
+        // disabled only because LanguageTool marks it «picky» (passes its own examples): available in the strict mode, always as `check`
+        strictOnly: status.enabled === false && Array.isArray(r.ltTags) && r.ltTags.includes('picky') && /picky/i.test(status.reason || ''),
       },
     };
   } catch (err) {
@@ -348,6 +351,7 @@ function compileRule(r) {
  */
 function load(rulesDir) {
   state.rules = [];
+  state.strictRules = [];
   state.all = [];
   state.byKey = new Map();
   state.parenthetical = new Set();
@@ -374,12 +378,14 @@ function load(rulesDir) {
     state.all.push(res.rule);
     state.byKey.set(res.rule.key, res.rule);
     if (res.rule.enabled) state.rules.push(res.rule);
+    else if (res.rule.strictOnly) state.strictRules.push({ ...res.rule, confidence: 'check' });
   }
   state.info = {
     loaded: true,
     file,
     count: state.all.length,
     enabled: state.rules.length,
+    strict: state.strictRules.length,
     sure: state.rules.filter((r) => r.confidence === 'sure').length,
     groups: new Set(state.all.map((r) => r.id)).size,
     license: (data.source && data.source.license) || 'LGPL 2.1+',
@@ -783,7 +789,8 @@ function overlaps(a, b) {
  * @returns {object[]} the issues that were appended
  */
 function check(ctx, out, opts) {
-  const rules = (opts && opts.rules) || state.rules;
+  const strict = !!(ctx.settings && ctx.settings.strict);
+  const rules = (opts && opts.rules) || (strict && state.strictRules.length ? state.rules.concat(state.strictRules) : state.rules);
   if (!rules.length || !ctx.sentences.length) return [];
   const text = ctx.text;
   const hideSpans = ctx.settings && ctx.settings.skipQuotes ? (ctx.quotes || []).concat(ctx.speech || []) : [];
