@@ -19,6 +19,10 @@ const KAKOJ_FORMS = new Set(['какой', 'какая', 'какое', 'каки
 const CHEJ_FORMS = new Set(['чей', 'чья', 'чьё', 'чье', 'чьи', 'чьего', 'чьей', 'чьему', 'чьим', 'чьих', 'чью', 'чьими', 'чьём', 'чьем']);
 const RELATIVE_WORDS = new Set(['что', 'кто', 'чем', 'чего', 'чему', 'ком', 'кого', 'кому', 'кем', 'где', 'куда', 'откуда']);
 const NESMOTRYA_PRONOUNS = new Set(['я', 'ты', 'он', 'она', 'оно', 'мы', 'вы', 'они', 'все', 'всё', 'это', 'никто', 'ничто', 'каждый', 'многие', 'некоторые', 'кто-то', 'что-то', 'нам', 'мне', 'ему', 'ей', 'им', 'вам', 'тебе']);
+const VERB_HEAD_POS = new Set(['VERB', 'INFN', 'GRND', 'PRTS', 'PRED']);
+const GEN_KOTORYJ = { 'которого': { nmbr: 'sing', gndr: ['masc', 'neut'] }, 'которой': { nmbr: 'sing', gndr: ['femn'] }, 'которых': { nmbr: 'plur', gndr: null } };
+const QUANTIFIERS = new Set(['многие', 'многих', 'один', 'одна', 'одно', 'одной', 'одного', 'одним', 'одну', 'одни', 'одних', 'несколько', 'некоторые', 'некоторых', 'каждый', 'каждая', 'каждое', 'каждого', 'каждую', 'каждой', 'каждому', 'часть', 'части', 'большинство', 'большинства', 'большая', 'половина', 'половину', 'треть', 'четверть', 'никто', 'ничто', 'никого', 'ничего', 'любой', 'любая', 'любое', 'любого', 'любому', 'любую', 'первый', 'первая', 'первое', 'первого', 'первую', 'последний', 'последняя', 'последнее', 'последнего', 'лучший', 'лучшая', 'лучшее', 'худший', 'оба', 'обе', 'обоих', 'обеих', 'все', 'всё', 'всех', 'кто-то', 'что-то', 'кое-кто', 'кое-что', 'остальные', 'остальных', 'прочие', 'иные', 'другие', 'другой', 'другая', 'другое', 'сотни', 'тысячи', 'десятки', 'миллионы', 'множество', 'большинству', 'меньшинство', 'мало', 'много', 'немногие', 'немало', 'единицы', 'ни', 'никакой', 'никакая', 'никакое', 'какой-то', 'какая-то', 'какое-то', 'какие-то']);
+const IDIOM_KNOWS = new Set(['бог', 'чёрт', 'черт', 'кто', 'бес', 'пёс', 'пес', 'шут', 'леший', 'аллах', 'господь']);
 const COORD_BEFORE_INTRO = new Set(['а', 'и', 'но', 'да']);
 const PARTICLE_BEFORE_INTRO = new Set(['ну', 'уж', 'вот', 'ведь']);
 const PERSONAL_NOM = new Set(['я', 'ты', 'он', 'она', 'оно', 'мы', 'вы', 'они']);
@@ -134,9 +138,54 @@ function whyFor(entry, shifted, prepText) {
   return `Придаточное предложение отделяется запятой: перед «${entry.text}» нужна запятая.`;
 }
 
+/** Does the sentence end with a question mark (possibly followed by «!» or a closing quote)? */
+function isQuestion(ctx, sentence) {
+  const toks = sentence.tokens;
+  for (let k = toks.length - 1; k >= 0 && k >= toks.length - 3; k--) {
+    const t = ctx.tokens[toks[k]];
+    if (t.type !== 'punct') return false;
+    if (t.text === '?') return true;
+  }
+  return false;
+}
+
+/** Word with a verb-like reading (finite verb, infinitive, gerund, short participle, predicative). */
+function isVerbHead(tok) {
+  return !!tok && tok.type === 'word' && morph.dictParses(tok.text).some((p) => VERB_HEAD_POS.has(p.tag.POS));
+}
+
+/** Is there a verb-like word among the words before sentence word index wi, inside the same clause (no punctuation on the way)? */
+function clauseHasVerb(ctx, sentence, wi) {
+  const words = sentence.words;
+  for (let k = wi - 1; k >= 0; k--) {
+    const tok = ctx.tokens[words[k]];
+    if (!adjacent(ctx, sentence, k, 2)) return isVerbHead(tok);
+    if (isVerbHead(tok)) return true;
+  }
+  return false;
+}
+
+function hasNounReading(tok) {
+  return !!tok && tok.type === 'word' && morph.dictParses(tok.text).some((p) => p.tag.POS === 'NOUN');
+}
+
+/** Does any noun reading agree with the genitive form of «который» in number and gender? */
+function nounAgreesWithGen(tok, gen) {
+  return morph.dictParses(tok.text).some((p) => p.tag.POS === 'NOUN' && p.tag.NMbr === gen.nmbr && (!gen.gndr || gen.gndr.includes(p.tag.GNdr)));
+}
+
+function isPrepLike(tok, conj) {
+  return !!tok && tok.type === 'word' && (conj.prepositions.has(tok.lower) || tok.lower === 'несмотря' || tok.lower === 'невзирая' || morph.dictParses(tok.text).some((p) => p.tag.POS === 'PREP'));
+}
+
+function isQuantifier(tok) {
+  return !!tok && (tok.type === 'num' || (tok.type === 'word' && (QUANTIFIERS.has(tok.lower) || morph.dictParses(tok.text).some((p) => p.tag.POS === 'NUMR'))));
+}
+
 function subordinatingIssue(ctx, sentence, wi, conj) {
   const words = sentence.words;
   const tok = ctx.tokens[words[wi]];
+  if (tok.cap) return null; // «спрашиваю Что это», «Закон Латта Если …» — a new sentence or direct speech without quotes
   for (const entry of conj.subordinating) {
     if (!matchEntry(ctx, sentence, wi, entry)) continue;
     const lastTok = ctx.tokens[words[wi + entry.words.length - 1]];
@@ -144,11 +193,13 @@ function subordinatingIssue(ctx, sentence, wi, conj) {
     const nextWord = next && next.type === 'word' ? next : null;
     if (entry.skipIfNext && nextWord && entry.skipIfNext.includes(nextWord.lower)) return null;
     if (entry.skipIfLast && (!next || next.type === 'punct')) return null;
+    if (entry.skipIfNextComp && nextWord && morph.dictParses(nextWord.text).some((p) => p.tag.POS === 'COMP')) return null; // «куда лучше»
     if (entry.nextVerb) {
       let w = nextWord;
       if (w && w.lower === 'не') w = ctx.nextWordFrom(w.end);
       if (!w || !morph.dictParses(w.text).some((p) => p.tag.POS === 'VERB' || p.tag.POS === 'INFN')) return null;
     }
+    if (entry.needsClauseVerb && !clauseHasVerb(ctx, sentence, wi)) return null; // «заявлять их пока не буду» — an adverb, no main clause yet
 
     if (entry.kind === 'li') {
       if (wi < 2) return null;
@@ -165,6 +216,7 @@ function subordinatingIssue(ctx, sentence, wi, conj) {
 
     let prevTok = ctx.prevTokenBefore(tok.start);
     if (!prevTok || prevTok.type !== 'word' || prevTok.si !== tok.si) return null;
+    const question = !!entry.question && isQuestion(ctx, sentence);
     let shifted = false;
     let prepText = '';
     const relative = entry.formSet || RELATIVE_WORDS.has(entry.text);
@@ -172,12 +224,31 @@ function subordinatingIssue(ctx, sentence, wi, conj) {
       const beforePrep = ctx.prevTokenBefore(prevTok.start);
       if (!beforePrep || beforePrep.type !== 'word' || beforePrep.si !== tok.si) return null;
       if (!entry.formSet && !['что', 'чем', 'кто'].includes(entry.text)) return null;
+      const anchor = prevTok;
+      if (entry.formSet) {
+        // «специалисты, многие из которых…», «башенки, на одной из которых…», «девять мячей, три из которых…»: the clause starts at the quantifier
+        if (isQuantifier(beforePrep)) {
+          const beforeQ = ctx.prevTokenBefore(beforePrep.start);
+          if (!beforeQ || beforeQ.type !== 'word' || beforeQ.si !== tok.si || conj.stops.has(beforeQ.lower)) return null; // comma or sentence start already delimits the clause
+          const phrase = ctx.text.slice(beforePrep.start, tok.end);
+          return commaIssue(ctx, beforeQ, beforePrep, 'punct.comma-before-conj', 'check', `Придаточное начинается с «${phrase}» — запятая ставится перед «${beforePrep.text}».`, refFor(entry), undefined, { conj: entry.text });
+        }
+        // «…, сведения о которых…», «…, в обмен на которые…»: a comma before the noun (or its preposition) already opens the clause
+        if (hasNounReading(beforePrep)) {
+          const beforeNoun = ctx.prevTokenBefore(beforePrep.start);
+          if (beforeNoun && beforeNoun.si === tok.si && beforeNoun.type === 'punct') return null;
+          if (beforeNoun && beforeNoun.si === tok.si && isPrepLike(beforeNoun, conj)) {
+            const b2 = ctx.prevTokenBefore(beforeNoun.start);
+            if (b2 && b2.si === tok.si && b2.type === 'punct') return null;
+          }
+        }
+      }
       shifted = true;
       prepText = prevTok.text;
-      const anchor = prevTok;
       prevTok = beforePrep;
       if (conj.stops.has(prevTok.lower)) return null;
       if (entry.skipIfPrev && entry.skipIfPrev.includes(prevTok.lower)) return null;
+      if (question && !isVerbHead(prevTok)) return null; // «Ты с какого района?», «с тебя про что взяли?»
       const confidence = isHead(ctx, prevTok, conj.headPos) ? entry.confidence : 'check';
       return commaIssue(ctx, prevTok, anchor, 'punct.comma-before-conj', confidence, whyFor(entry, true, prepText), refFor(entry), undefined, { conj: entry.text });
     }
@@ -185,12 +256,49 @@ function subordinatingIssue(ctx, sentence, wi, conj) {
       // «то, что» is allowed unless «не то что»
       if (!(prevTok.lower === 'то' && entry.text === 'что')) return null;
     }
-    if (prevTok.lower === 'то') {
+    if (prevTok.lower === 'то' || prevTok.lower === 'того') {
       const beforeTo = ctx.prevTokenBefore(prevTok.start);
       if (beforeTo && beforeTo.type === 'word' && ['не', 'и', 'а', 'да'].includes(beforeTo.lower)) return null;
+      if (prevTok.lower === 'то' && entry.text !== 'что' && !entry.formSet) return null; // «если …, то какое мне дело» — «то» of «если … то»
+      // «Несмотря на то что…», «Из-за того что…» at the start of a sentence (or after a comma / «и»): the compound conjunction is not split
+      if (entry.text === 'что' && beforeTo && beforeTo.type === 'word' && beforeTo.si === tok.si && isPrepLike(beforeTo, conj)) {
+        const b2 = ctx.prevTokenBefore(beforeTo.start);
+        if (!b2 || b2.si !== tok.si || b2.type === 'punct' || ['и', 'а', 'но'].includes(b2.lower)) return null;
+      }
     }
     if (entry.skipIfPrev && entry.skipIfPrev.includes(prevTok.lower)) return null;
     if (conj.prepositions.has(prevTok.lower) && !entry.formSet) return null; // «о чём», «за что» – pronoun after preposition
+    if (question && !isVerbHead(prevTok)) return null; // «Это кто?», «Ты чем занимаешься?», «Тогда зачем?» — a question word, not a clause
+    if (prevTok.lower === 'знает' || prevTok.lower === 'весть') {
+      const b = ctx.prevTokenBefore(prevTok.start);
+      if (b && b.type === 'word' && IDIOM_KNOWS.has(b.lower)) return null; // «бог знает сколько», «чёрт знает что»
+    }
+    if (entry.formSet) {
+      // «…, реализовать которые невозможно»: the clause starts at the infinitive right after the comma
+      if (morph.dictParses(prevTok.text).some((p) => p.tag.POS === 'INFN')) {
+        const b = ctx.prevTokenBefore(prevTok.start);
+        if (b && b.type === 'punct') return null;
+      }
+      // genitive «которого / которой / которых» after a noun: «размер которой», «в результате которого» — the noun belongs to the
+      // relative clause («…, размер которой упал»), so the comma goes before the noun (and its preposition), not before «которой»
+      const gen = GEN_KOTORYJ[tok.lower];
+      if (gen && hasNounReading(prevTok)) {
+        let start = prevTok;
+        const b = ctx.prevTokenBefore(prevTok.start);
+        if (b && b.type === 'word' && b.si === tok.si && conj.prepositions.has(b.lower)) start = b;
+        const beforeStart = ctx.prevTokenBefore(start.start);
+        if (!beforeStart || beforeStart.si !== tok.si || beforeStart.type !== 'word') return null; // a comma (or the sentence start) already delimits the clause
+        if (!nounAgreesWithGen(prevTok, gen)) {
+          // the noun cannot be the antecedent («президентом которой», «частях которого») — the possessive reading is certain
+          if (conj.stops.has(beforeStart.lower)) return null;
+          const phrase = ctx.text.slice(start.start, tok.end);
+          const confidence = isHead(ctx, beforeStart, conj.headPos) ? entry.confidence : 'check';
+          return commaIssue(ctx, beforeStart, start, 'punct.comma-before-conj', confidence, `Придаточное начинается с «${phrase}» — запятая ставится перед «${start.text}», а не перед «${tok.text}».`, refFor(entry), undefined, { conj: entry.text });
+        }
+        // the noun agrees with «который»: either its antecedent («человека, которого») or a possessive («имён, которых») — let the editor decide
+        return commaIssue(ctx, prevTok, tok, 'punct.comma-before-conj', 'check', `Перед «${tok.text}» начинается придаточное — нужна запятая. Если «${prevTok.text}» входит в придаточное («…, ${prevTok.text} ${tok.text}…»), запятая ставится перед ним.`, refFor(entry), undefined, { conj: entry.text });
+      }
+    }
     let confidence = entry.confidence || 'check';
     if (entry.needsHead && !isHead(ctx, prevTok, conj.headPos)) confidence = 'check';
     return commaIssue(ctx, prevTok, tok, 'punct.comma-before-conj', confidence, whyFor(entry, false), refFor(entry), undefined, { conj: entry.text });
@@ -201,6 +309,7 @@ function subordinatingIssue(ctx, sentence, wi, conj) {
 function adversativeIssue(ctx, sentence, wi, conj) {
   const words = sentence.words;
   const tok = ctx.tokens[words[wi]];
+  if (tok.cap) return null; // «ушёл А я остался» — a new sentence without a period, not a clause boundary we can mark
   for (const entry of conj.adversative) {
     if (!matchEntry(ctx, sentence, wi, entry)) continue;
     const prevTok = ctx.prevTokenBefore(tok.start);
