@@ -867,11 +867,25 @@ function kakIssue(ctx, sentence, wi, X, conj, out) {
   const headNominal = nounParses(headTok).length || hasPos(headTok, 'NPRO') || isAdjOnly(headTok) || hasPos(headTok, 'PREP') || headTok.type === 'num' || hasPos(headTok, 'NUMR');
   const headVerb = isFiniteVerbStrict(headTok);
   if (!headNominal && !headVerb) return;
-  // subordinate clause: «как» + (noun/pronoun) + verb, or «как» + verb; «как и …» is always a comparison
-  const rest = clauseFrom(ctx, sentence, afterKak, 6);
+  // «как …, так и …» is the double conjunction (punct.comma-double-conj puts the comma before «так и»)
+  for (let k = wi + 2; k <= wi + 9 && k + 1 < words.length; k++) {
+    const t = ctx.tokens[words[k]];
+    if (t.si !== tok.si) break;
+    if (t.lower === 'так' && ctx.tokens[words[k + 1]].lower === 'и') return;
+  }
+  // subordinate clause: «как» + (noun/pronoun) + verb, or «как» + verb; «как и …» is always a comparison.
+  // The clause ends at a coordinating conjunction («сидели как сычи, а потом начали» — «начали» is not inside it).
+  let rest = clauseFrom(ctx, sentence, afterKak, 6);
+  const coordAt = rest.findIndex((t, i) => i > 0 && COORD.has(t.lower) && t.lower !== 'не');
+  if (coordAt > 0) rest = rest.slice(0, coordAt);
   const subordinate = next.lower !== 'и' && (headVerb || rest.slice(1).some(isFiniteVerbStrict));
   if (subordinate && !isVerbLike(prev) && !nounParses(prev).length && !hasPos(prev, 'ADVB') && !hasPos(prev, 'NPRO')) return;
   if (!subordinate && (prev.lower === 'такой' || prev.lower === 'так')) return;
+  // «видел, как он ушёл», «понять, как это работает»: a verb before «как» and a clause after it is the most reliable «как» (§ 140),
+  // but on the eval stand it is still only 4 of 5 — so every «как» stays `check`; the kind is kept in meta for the stand
+  const prevVerb = isVerbLike(prev) || isInfinitive(prev) || hasPos(prev, 'GRND');
+  const subVerb = subordinate && prevVerb && !KAK_CLAUSE_IDIOM_NEXT.has(next.lower) && !(headVerb && rest.length === 1);
+  const kakKind = subordinate ? (subVerb ? 'sub-verb' : 'sub-other') : next.lower === 'и' ? 'kak-i' : 'cmp';
   const why = subordinate
     ? `После «${prev.text}» союз «как» начинает придаточное предложение — перед ним нужна запятая (если это не цельное выражение вроде «как хочешь»).`
     : next.lower === 'и'
@@ -881,9 +895,11 @@ function kakIssue(ctx, sentence, wi, X, conj, out) {
     ruleId: 'punct.comma-comparative', confidence: 'check',
     ref: subordinate ? [140] : [150],
     manualRef: subordinate ? ['pm-spp-comma', 'pm-spp-idioms'] : ['pm-compare-kak-yes', 'pm-compare-kak-no'],
-    why, meta: { conj: 'как' },
+    why, meta: { conj: `как:${kakKind}` },
   }));
 }
+
+const KAK_CLAUSE_IDIOM_NEXT = new Set(['бы', 'б', 'раз', 'минимум', 'максимум', 'можно', 'нельзя', 'надо', 'нужно', 'следует', 'положено', 'полагается', 'получится', 'получается', 'хочешь', 'хочет', 'хотите', 'хотят', 'знаешь', 'знает', 'знаете', 'угодно', 'попало', 'обычно', 'всегда', 'никогда', 'когда', 'если', 'только', 'будто', 'словно', 'есть', 'было', 'будет', 'вдруг', 'ни', 'не', 'же', 'ж', 'говорится', 'говорят', 'известно', 'правило', 'правильно', 'видно', 'видите', 'видишь', 'понимаешь', 'понимаете', 'думаешь', 'думаете', 'считаешь', 'считаете', 'кажется', 'оказалось', 'выяснилось', 'принято', 'заведено', 'положено', 'обещал', 'обещала', 'договаривались', 'планировалось', 'ожидалось', 'ожидали', 'сказано', 'написано', 'должно', 'следовало', 'умеешь', 'умеет', 'умею', 'могу', 'можешь', 'может', 'сумею', 'сумеет', 'сумеешь', 'хочу', 'прежде', 'раньше', 'ранее', 'сейчас', 'теперь', 'тогда', 'всё', 'все', 'это', 'так', 'там', 'тут', 'здесь', 'никто', 'ничто', 'никак', 'нигде', 'никуда', 'что', 'кто', 'чем', 'чтобы', 'ли', 'пить', 'дышать']);
 
 /* ---------- 5. addresses ---------- */
 

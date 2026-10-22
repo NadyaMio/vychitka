@@ -22,6 +22,9 @@ const NESMOTRYA_PRONOUNS = new Set(['я', 'ты', 'он', 'она', 'оно', '�
 const VERB_HEAD_POS = new Set(['VERB', 'INFN', 'GRND', 'PRTS', 'PRED']);
 const GEN_KOTORYJ = { 'которого': { nmbr: 'sing', gndr: ['masc', 'neut'] }, 'которой': { nmbr: 'sing', gndr: ['femn'] }, 'которых': { nmbr: 'plur', gndr: null } };
 const QUANTIFIERS = new Set(['многие', 'многих', 'один', 'одна', 'одно', 'одной', 'одного', 'одним', 'одну', 'одни', 'одних', 'несколько', 'некоторые', 'некоторых', 'каждый', 'каждая', 'каждое', 'каждого', 'каждую', 'каждой', 'каждому', 'часть', 'части', 'большинство', 'большинства', 'большая', 'половина', 'половину', 'треть', 'четверть', 'никто', 'ничто', 'никого', 'ничего', 'любой', 'любая', 'любое', 'любого', 'любому', 'любую', 'первый', 'первая', 'первое', 'первого', 'первую', 'последний', 'последняя', 'последнее', 'последнего', 'лучший', 'лучшая', 'лучшее', 'худший', 'оба', 'обе', 'обоих', 'обеих', 'все', 'всё', 'всех', 'кто-то', 'что-то', 'кое-кто', 'кое-что', 'остальные', 'остальных', 'прочие', 'иные', 'другие', 'другой', 'другая', 'другое', 'сотни', 'тысячи', 'десятки', 'миллионы', 'множество', 'большинству', 'меньшинство', 'мало', 'много', 'немногие', 'немало', 'единицы', 'ни', 'никакой', 'никакая', 'никакое', 'какой-то', 'какая-то', 'какое-то', 'какие-то']);
+const CONJ_START_WORDS = new Set(['но', 'и']);
+const PARENTHETICAL_VERBS = new Set(['полагаю', 'думаю', 'считаю', 'надеюсь', 'признаюсь', 'признаться', 'уверен', 'уверена', 'знаю', 'вижу', 'говорю', 'скажу', 'помню', 'повторяю', 'подчеркну', 'замечу', 'заметить', 'сказать', 'отметить', 'добавить', 'напомню', 'напомнить', 'боюсь', 'чувствую', 'слышал', 'слышала', 'понимаю', 'предполагаю', 'подозреваю', 'верю', 'клянусь', 'ручаюсь', 'надеемся', 'думаем', 'полагаем', 'считаем', 'знаем', 'видим', 'помним', 'понимаем']);
+const CONJ_START_KEEP = new Set(['да', 'нет', 'увы', 'ах', 'ох', 'эх', 'ой', 'ну', 'впрочем', 'главное', 'правда', 'кстати', 'конечно', 'пожалуйста', 'спасибо', 'извините', 'простите', 'прошу', 'господа', 'друзья', 'ребята', 'коллеги', 'дорогие', 'уважаемые', 'товарищи', 'братья', 'мама', 'папа', 'сынок', 'дочка', 'милый', 'милая', 'дорогой', 'дорогая', 'во-первых', 'во-вторых', 'в-третьих', 'наконец', 'напротив', 'наоборот', 'соответственно', 'следовательно', 'значит', 'стало', 'вообще', 'в', 'с', 'к', 'по', 'на', 'что', 'если', 'когда', 'хотя', 'как', 'чтобы', 'пока', 'раз', 'потом', 'тем', 'всё', 'все', 'ещё', 'еще']);
 const KTO_HEADS = new Set(['тот', 'та', 'те', 'тем', 'того', 'тех', 'всем', 'всех', 'всякого', 'всякий', 'всякому', 'каждого', 'каждый', 'каждому', 'любого', 'любой', 'любому', 'никого', 'никто', 'никому', 'первый', 'последний', 'единственный', 'единственным', 'единственного', 'таких', 'такие', 'такой']);
 const CHTO_HEADS = new Set(['всё', 'все', 'всего', 'всему', 'всем', 'то', 'того', 'тому', 'том', 'тем']);
 const COMPOUND_CONJ_PREPS = new Set(['несмотря', 'невзирая', 'на', 'из-за', 'ввиду', 'вследствие', 'благодаря', 'вопреки', 'в', 'силу', 'связи', 'с', 'независимо', 'от']);
@@ -437,6 +440,41 @@ function odnakoStart(ctx, sentence) {
   });
 }
 
+/**
+ * «Но, я могу…», «И, представляете…» — a comma right after a sentence-initial conjunction is only correct before an
+ * intro word, gerund phrase, address or interjection; otherwise it is stray (§ 155: the intro word is separated,
+ * not the conjunction). Only «но» and «и»: «Да, …» is the answer word, «А, …» an interjection.
+ */
+function conjStart(ctx, sentence, intro) {
+  if (sentence.words.length < 3) return null;
+  const tok = ctx.tokens[sentence.words[0]];
+  if (!CONJ_START_WORDS.has(tok.lower) || sentence.tokens[0] !== sentence.words[0]) return null;
+  const comma = ctx.nextTokenFrom(tok.end);
+  if (!comma || comma.type !== 'punct' || comma.text !== ',' || comma.start !== tok.end) return null;
+  const next = ctx.nextTokenFrom(comma.end);
+  if (!next || next.type !== 'word' || next.si !== tok.si || next.i !== sentence.words[1]) return null;
+  if (next.cap || CONJ_START_KEEP.has(next.lower)) return null; // name (address), «да/нет», interjection
+  if (intro.some((entry) => matchEntry(ctx, sentence, 1, entry))) return null; // «Но, конечно, …», «И, по-моему, …»
+  const parses = morph.dictParses(next.text);
+  if (!parses.length || parses.some((p) => p.tag.POS === 'GRND' || p.tag.POS === 'INTJ' || p.tag.Prnt)) return null; // «И, подумав, …»
+  const after = ctx.nextTokenFrom(next.end);
+  if (after && after.type === 'punct' && after.si === tok.si) return null; // «Но, увы, …» — a one-word parenthesis we do not know
+  // «И, я полагаю, …», «И, надо признаться, …» — a parenthetical clause (§ 155) rather than a stray comma
+  if (after && after.type === 'word' && (PERSONAL_NOM.has(next.lower) || next.lower === 'надо' || next.lower === 'нужно' || next.lower === 'стоит') && PARENTHETICAL_VERBS.has(after.lower)) return null;
+  return makeIssue({
+    para: ctx.para,
+    start: tok.start,
+    end: next.end,
+    category: 'punctuation',
+    ruleId: 'punct.conj-start',
+    before: ctx.text.slice(tok.start, next.end),
+    after: tok.text + ctx.text.slice(comma.end, next.end),
+    confidence: 'check',
+    why: `После союза «${tok.text}» в начале предложения запятая не ставится: она нужна только перед вводным словом, обращением или деепричастным оборотом («${tok.text}, конечно, …»).`,
+    ref: [155],
+  });
+}
+
 /** «Несмотря на X …, подлежащее» at sentence start without the closing comma. */
 function nesmotryaStart(ctx, sentence) {
   const w = sentence.words;
@@ -515,6 +553,8 @@ function check(ctx) {
   for (const sentence of ctx.sentences) {
     const odn = odnakoStart(ctx, sentence);
     if (odn) out.push(odn);
+    const cs = conjStart(ctx, sentence, intro);
+    if (cs) out.push(cs);
     const nes = nesmotryaStart(ctx, sentence);
     if (nes) out.push(nes);
     for (let wi = 0; wi < sentence.words.length; wi++) {
