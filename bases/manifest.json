@@ -1,11 +1,11 @@
 {
-  "version": "2026.10.3",
+  "version": "2026.10.4",
   "date": "2026-10-22",
   "files": [
     {
       "path": "LICENSES.md",
-      "size": 9616,
-      "sha256": "b6b008147ae04bb2bc5209f0ce442ae7d2ce21cb04457746b3bd7ffe976753e7"
+      "size": 15643,
+      "sha256": "781edbb959166a6e37945d6e77e74f29df9ecaff2d7af56c47f13da1a61474c7"
     },
     {
       "path": "az/grammemes.json",
@@ -94,8 +94,8 @@
     },
     {
       "path": "rules/conj.json",
-      "size": 7961,
-      "sha256": "a0afbfa54d7f770e0290501b801c28e891f471bc59da48be22cd5ee75da0a422"
+      "size": 13482,
+      "sha256": "3139f0f75de481a2bdec36e4bec898d2b23c128061e6ae4ceff7cdf14a78bd8d"
     },
     {
       "path": "rules/grammar.json",
@@ -109,13 +109,18 @@
     },
     {
       "path": "rules/intro.json",
-      "size": 10731,
-      "sha256": "8dadf53f53d37ed188866125e861029feadfd621e3c92c83ae5b31add66423b9"
+      "size": 16676,
+      "sha256": "c1cca6d434660d3a0813fd3ba5789d6c23df7b090f9a5410144e7f50a322bfc4"
     },
     {
       "path": "rules/kanc.json",
       "size": 50452,
       "sha256": "7a1ba679e6c6afd809482b87bcb498d111ff493ae07a19407317a5394d59a0ea"
+    },
+    {
+      "path": "rules/lt-punct.json",
+      "size": 524341,
+      "sha256": "475f34d88f1aca7c86be29a3d0ef5f1d5e616734fbd1998d7fab05b7a5beaf36"
     },
     {
       "path": "rules/nominal-verbs.json",
@@ -141,6 +146,31 @@
       "path": "rules/yo.json",
       "size": 4032,
       "sha256": "d5c173c9a015b709953e5acf4b5c2b0ec1aeecc83cca18be3d240e9ba1cca1e1"
+    },
+    {
+      "path": "wiktionary/conj.json",
+      "size": 40108,
+      "sha256": "27b2faee03a5331168c5b392b95f886a63ae11b26b67f3d7b8ca8afce76f8ffc"
+    },
+    {
+      "path": "wiktionary/idioms.json",
+      "size": 4914693,
+      "sha256": "fa557b829d9da23e051337d84e50842824e8279a5fa5b915643d2a425c0b76c8"
+    },
+    {
+      "path": "wiktionary/intro.json",
+      "size": 28165,
+      "sha256": "943eadba1efa56a8fce153042c2e1b04d33ce27f237fda8cd568478e4f1a27dd"
+    },
+    {
+      "path": "wiktionary/meta.json",
+      "size": 1771,
+      "sha256": "77a348a29bdcd50095148a10f38f925e88a7f6837c74f2f0d0db20115ce84d8a"
+    },
+    {
+      "path": "wiktionary/particles.json",
+      "size": 54320,
+      "sha256": "ffa6997ba219b2ed4373aabe09c1d04e086ccd440e51f22820b5739497cc2439"
     }
   ],
   "modules": [
@@ -151,7 +181,7 @@
       "license": "CC BY-SA 4.0 (данные) · MIT (Az.js)",
       "files": 11,
       "bytes": 11177662,
-      "version": "2026.10.3",
+      "version": "2026.10.4",
       "status": "builtin"
     },
     {
@@ -161,7 +191,7 @@
       "license": "CC BY-SA 4.0",
       "files": 1,
       "bytes": 998861,
-      "version": "2026.10.3",
+      "version": "2026.10.4",
       "status": "builtin"
     },
     {
@@ -171,7 +201,7 @@
       "license": "проект «Вычитка»",
       "files": 1,
       "bytes": 8566,
-      "version": "2026.10.3",
+      "version": "2026.10.4",
       "status": "builtin"
     },
     {
@@ -179,9 +209,9 @@
       "title": "Правила проверки (данные)",
       "dir": "rules",
       "license": "проект «Вычитка»",
-      "files": 10,
-      "bytes": 203884,
-      "version": "2026.10.3",
+      "files": 11,
+      "bytes": 739691,
+      "version": "2026.10.4",
       "status": "builtin"
     },
     {
@@ -191,7 +221,7 @@
       "license": "официальный нормативный документ · публикация therules.ru",
       "files": 2,
       "bytes": 484315,
-      "version": "2026.10.3",
+      "version": "2026.10.4",
       "status": "builtin"
     },
     {
@@ -201,10 +231,20 @@
       "license": "текст — общественное достояние · оцифровка Викитеки — CC BY-SA 4.0",
       "files": 2,
       "bytes": 9869982,
-      "version": "2026.10.3",
+      "version": "2026.10.4",
+      "status": "builtin"
+    },
+    {
+      "id": "wiktionary",
+      "title": "Викисловарь: устойчивые сочетания, союзы, вводные слова",
+      "dir": "wiktionary",
+      "license": "CC BY-SA 4.0",
+      "files": 5,
+      "bytes": 5039057,
+      "version": "2026.10.4",
       "status": "builtin"
     }
   ],
-  "totalBytes": 22752886,
-  "minApp": "0.2.0"
+  "totalBytes": 28333777,
+  "minApp": "0.3.0"
 }
