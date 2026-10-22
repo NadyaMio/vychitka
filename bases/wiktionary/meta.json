@@ -1,0 +1,72 @@
+{
+  "title": "Русский Викисловарь: устойчивые сочетания, союзы, вводные слова, частицы",
+  "source": "ru.wiktionary.org, MediaWiki API, по категориям",
+  "sourceUrl": "https://ru.wiktionary.org/",
+  "license": "CC BY-SA 4.0 (тексты русского Викисловаря, https://creativecommons.org/licenses/by-sa/4.0/)",
+  "retrieved": "2026-10-22",
+  "sets": {
+    "idioms": {
+      "file": "idioms.json",
+      "pages": 15355,
+      "count": 15339,
+      "withDefinition": 15095,
+      "skipped": {
+        "no-ru": 4,
+        "latin": 11,
+        "no-cyr": 1
+      },
+      "bytes": 4914693,
+      "categories": [
+        "Устойчивые сочетания/ru",
+        "Фразеологизмы/ru"
+      ],
+      "repeatedConj": 48,
+      "withKak": 218
+    },
+    "conj": {
+      "file": "conj.json",
+      "pages": 177,
+      "count": 176,
+      "withDefinition": 169,
+      "skipped": {
+        "no-ru": 1,
+        "latin": 0,
+        "no-cyr": 0
+      },
+      "bytes": 40108,
+      "categories": [
+        "Русские союзы"
+      ]
+    },
+    "intro": {
+      "file": "intro.json",
+      "pages": 123,
+      "count": 123,
+      "withDefinition": 123,
+      "skipped": {
+        "no-ru": 0,
+        "latin": 0,
+        "no-cyr": 0
+      },
+      "bytes": 28165,
+      "categories": [
+        "Русские вводные слова"
+      ]
+    },
+    "particles": {
+      "file": "particles.json",
+      "pages": 246,
+      "count": 245,
+      "withDefinition": 245,
+      "skipped": {
+        "no-ru": 1,
+        "latin": 0,
+        "no-cyr": 0
+      },
+      "bytes": 54320,
+      "categories": [
+        "Русские частицы"
+      ]
+    }
+  }
+}

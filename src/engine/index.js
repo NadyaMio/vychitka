@@ -20,9 +20,11 @@ const morph = require('./morph');
 const rules1956 = require('./rules1956');
 const punctManual = require('./punctmanual');
 const dal = require('./dal');
+const idioms = require('./idioms');
 const { buildContext } = require('./context');
 const spelling = require('./spelling');
 const punctuation = require('./punctuation');
+const ltRules = require('./ltrules');
 const grammar = require('./grammar');
 const typography = require('./typography');
 const repeats = require('./repeats');
@@ -122,10 +124,12 @@ async function init(opts = {}) {
   const extra = fs.existsSync(extraFile) ? loadWordList(extraFile) : new Set();
   morph.setExtraWords(expandExtra(extra));
   state.rules = loadRules(basesDir);
+  ltRules.load(path.join(basesDir, 'rules')); // LanguageTool punctuation rules (lt-punct.json); absent file → no-op
   const refFile = path.join(basesDir, 'reference', 'rules-1956.json');
   const refLoaded = rules1956.load(refFile);
   punctManual.load(path.join(basesDir, 'reference', 'punct-manual.json'));
   dal.configure(basesDir); // paths + meta.json only; the dictionary itself loads on the first word card
+  idioms.load(basesDir); // set phrases: built-in § 146/§ 150 lists + punct-extra pairs + bases/wiktionary/idioms.json
   const manifestFile = path.join(basesDir, 'manifest.json');
   state.manifest = fs.existsSync(manifestFile) ? loadJson(manifestFile) : null;
   state.basesDir = basesDir;
@@ -314,6 +318,20 @@ function manualRule(id) {
 }
 
 /**
+ * Set phrase around a position or selection in a paragraph — for the «why no comma here» hint.
+ * @param {string} paragraphText
+ * @param {number} start
+ * @param {number} [end]
+ * @returns {{ idiom:string, note:string, ref:number[], kind:string, start:number, end:number, url:string, definition:string, source:string } | null}
+ */
+function explainSpan(paragraphText, start, end) {
+  assertReady();
+  if (typeof paragraphText !== 'string') throw new TypeError('explainSpan: paragraphText must be a string');
+  if (typeof start !== 'number' || !Number.isFinite(start)) throw new TypeError('explainSpan: start must be a number');
+  return idioms.explainSpan(paragraphText, start, end);
+}
+
+/**
  * Information about loaded bases for the «Словари и базы» screen.
  * @returns {{ version:string, date:string, modules:object[] }}
  */
@@ -329,16 +347,22 @@ function basesInfo() {
   const extraOk = !!dir && fs.existsSync(path.join(dir, 'extra', 'words.txt'));
   const refInfo = rules1956.info();
   const manualInfo = punctManual.info();
+  const ltInfo = ltRules.info();
   const dalInfo = dal.info();
   const dalDetail = dalInfo.available
     ? `${dalInfo.count.toLocaleString('ru-RU')} статей · 2-е издание · по Викитеке (CC BY-SA)`
     : 'файл bases/dal/dal.json.gz не найден';
+  const wikiInfo = idioms.info();
+  const wikiDetail = wikiInfo.available
+    ? `${wikiInfo.count.toLocaleString('ru-RU')} устойчивых сочетаний · ${wikiInfo.conj} союзов · ${wikiInfo.intro} вводных слов · CC BY-SA 4.0`
+    : `файл bases/wiktionary/idioms.json не найден · работает встроенный список (${wikiInfo.total} выражений)`;
   const modules = [
     { id: 'spelling-opencorpora', title: 'Орфографический словарь (OpenCorpora)', detail: '389 022 лексемы · морфология Az.js', version, status: ok(azOk), bytes: dir ? fileSize(path.join(dir, 'az', 'words.dawg')) + fileSize(path.join(dir, 'az', 'paradigms.array')) : 0, toggle: true },
     { id: 'spelling-extra', title: 'Дополнительный словарь', detail: `${state.extraCount || 0} современных слов (референс, онбординг, дедлайн…)`, version, status: ok(extraOk), bytes: dir ? fileSize(path.join(dir, 'extra', 'words.txt')) : 0, toggle: true },
     { id: 'spelling-freq', title: 'Частотный список', detail: '50 000 словоформ · FrequencyWords (CC BY-SA 4.0) · ранжирование подсказок', version, status: ok(freqOk), bytes: dir ? fileSize(path.join(dir, 'freq', 'ru_50k.txt')) : 0, toggle: false },
     { id: 'spelling-phrases', title: 'Орфография: слитно, раздельно, через дефис', detail: `${counts.phrases || 0} правил (чтобы, несмотря на, из-за, -нибудь…)`, version, status: ok(!!state.rules), toggle: true },
     { id: 'punctuation-rules', title: 'Пунктуация: запятые и вводные слова', detail: `${counts.conj || 0} союзов · ${counts.intro || 0} вводных слов`, version, status: ok(!!state.rules), toggle: true },
+    { id: 'punctuation-lt', title: 'Пунктуация: правила LanguageTool', detail: `${ltInfo.enabled || 0} правил из ${ltInfo.count || 0} (${ltInfo.groups || 0} групп) · LanguageTool, LGPL 2.1+ · languagetool.org`, version: ltInfo.converted || version, status: ltInfo.loaded ? 'builtin' : 'missing', bytes: ltInfo.file ? fileSize(ltInfo.file) : 0, toggle: false },
     { id: 'grammar-rules', title: 'Грамматика и управление', detail: 'в течение, по приезде, согласно + дат. п., оплатить, одеть/надеть, согласование', version, status: ok(!!state.rules), toggle: true },
     { id: 'typography-rules', title: 'Типографика', detail: 'тире, кавычки-ёлочки, разряды чисел, многоточие, буква ё', version, status: ok(!!state.rules), toggle: true },
     { id: 'kanc-style', title: 'Литературная правка: канцелярит и штампы', detail: `${counts.kanc || 0} шаблонов · ${counts.nominal || 0} пар «существительное → глагол» · ${counts.intensifiers || 0} усилителей`, version, status: ok(!!state.rules), toggle: true },
@@ -350,6 +374,7 @@ function basesInfo() {
     { id: 'gramota', title: 'Грамота.ру', detail: 'справочный портал — открывается в браузере', version: '', status: 'link', toggle: false },
     { id: 'nkrya', title: 'Национальный корпус русского языка', detail: 'не подключён', version: '', status: 'missing', toggle: false },
     { id: 'dal', title: 'Толковый словарь Даля', detail: dalDetail, version: dalInfo.retrieved || version, status: dalInfo.available ? 'builtin' : 'missing', bytes: dalInfo.bytes, toggle: false },
+    { id: 'wiktionary', title: 'Викисловарь: устойчивые сочетания, союзы, вводные слова', detail: wikiDetail, version: wikiInfo.retrieved || version, status: wikiInfo.available ? 'builtin' : 'missing', bytes: wikiInfo.bytes, toggle: false },
   ];
   return { version, date, modules };
 }
@@ -365,6 +390,7 @@ module.exports = {
   rule,
   searchRules,
   manualRule,
+  explainSpan,
   applyNbsp: typography.applyNbsp,
   applyIssues: applyIssuesImpl,
   defaultSettings,

@@ -11,7 +11,10 @@
     "dist:mac": "electron-builder --mac --publish never",
     "dist:win": "electron-builder --win --publish never",
     "bases:manifest": "node scripts/build-bases-manifest.js",
-    "test:unit": "node --test \"test/unit/*.test.js\""
+    "lt:convert": "node scripts/lt/convert.js",
+    "lt:calibrate": "node scripts/lt/calibrate.js",
+    "test:unit": "node --test \"test/unit/*.test.js\"",
+    "eval:punct": "node scripts/eval/eval-punct.js"
   },
   "author": "NadyaMio",
   "license": "MIT",

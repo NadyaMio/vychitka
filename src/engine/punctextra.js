@@ -21,6 +21,7 @@
 
 const morph = require('./morph');
 const { makeIssue } = require('./util');
+const idiomsMod = require('./idioms'); // set phrases (Викисловарь + § 146/§ 150 lists); `idioms` is a local name below
 
 const NBSP = ' ';
 const EM = '—';
@@ -679,6 +680,8 @@ function repeatedConj(ctx, sentence, wi, X, out) {
       if (a.join(' ') !== bet) continue;
       if (matchSeq(ctx, sentence, second + unit.length, [b]) === b.length) return;
     }
+    // any other set phrase covering «и X и Y» / «ни X ни Y» / «то X то Y» (Викисловарь, § 146 note): no comma
+    if (idiomsMod.isIdiomSpan(ctx.text, tok.start, afterTok.end)) return;
     // «и»: different homogeneous rows («купил хлеб и молоко и пошёл домой», «эллипсы с заливкой и радиусом») — no comma
     if (key === 'и') {
       if (isVerbLike(afterTok) !== isVerbLike(between[0]) && !PERSONAL.has(between[0].lower)) return;
@@ -772,6 +775,8 @@ function kakIssue(ctx, sentence, wi, X, conj, out) {
   // «как и …» — comparison with «как и»; idioms after it («как и обещал») are not flagged
   const afterKak = next.lower === 'и' ? wi + 2 : wi + 1;
   if (matchSeq(ctx, sentence, afterKak, X.comparison.kakIdioms)) return;
+  // «как» inside a set phrase of 3+ words («как по маслу», «белый как снег») — a stable comparison, § 150 (Викисловарь)
+  if (idiomsMod.isIdiomSpan(ctx.text, tok.start, tok.end, 3)) return;
   if (next.lower === 'и' && (!ctx.tokens[words[afterKak]] || !adjacentTokens(ctx, next, ctx.tokens[words[afterKak]]))) return;
   // «в качестве»: a verb of naming/using within 3 words before; a short participle («опубликован как артефакт»);
   // an object pronoun («выполняет их как команды»); an instrumental object after «как» («пользуются как справочником»)

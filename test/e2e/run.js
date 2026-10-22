@@ -190,6 +190,29 @@ async function step(name, fn) {
     await win.keyboard.press('Escape');
   });
 
+  await step('«и то и другое»: правки нет, по клику — объяснение § 146', async () => {
+    await win.click('#side [data-nav=start]');
+    await win.click('[data-startmode=proof]');
+    await win.click('[data-act=start-clear]').catch(() => {});
+    await setClipboard('И то и другое нормально: все читают по-своему. Астрологи составляют прогнозы по звёздам, а мы решили составить свой — по тому, как человек читает.');
+    await win.click('[data-act=start-paste]');
+    await win.click('[data-act=start-check]');
+    await win.waitForSelector('#paper p, #paper h1');
+    await win.waitForTimeout(800);
+    const marks = await win.$$eval('#paper .m.pn', els => els.map(e => e.textContent));
+    assert(!marks.some(t => /то|другое/.test(t)), `лишняя пометка в «и то и другое»: ${marks.join(' | ')}`);
+    const box = await win.evaluate(() => {
+      const el = [...document.querySelectorAll('#paper p, #paper h1')].find(x => x.textContent.includes('И то и другое'));
+      const n = [...el.childNodes].find(x => x.nodeType === 3 && x.data.includes('то и'));
+      const r = document.createRange(); const i = n.data.indexOf('то и'); r.setStart(n, i + 1); r.setEnd(n, i + 1);
+      const b = r.getBoundingClientRect(); return { x: b.left, y: b.top + b.height / 2 };
+    });
+    await win.mouse.click(box.x, box.y);
+    await win.waitForSelector('.pop >> text=§ 146', { timeout: 8000 });
+    await shot('10-idiom-explain');
+    await win.keyboard.press('Escape');
+  });
+
   await step('открытие DOCX', async () => {
     await win.click('[data-nav=start]');
     await win.click('[data-startmode=proof]');

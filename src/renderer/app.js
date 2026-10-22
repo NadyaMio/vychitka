@@ -534,12 +534,12 @@ function bindPaper() {
       renderPaper(false); setCaret(c.pi + mid.length + 1, tailOff); onManualEdit();
     }
   });
-  paper.addEventListener('input', () => onManualEdit());
+  paper.addEventListener('input', () => { if (popEl && !popEl.dataset.key) closePop(); onManualEdit(); });
   paper.addEventListener('click', e => {
     const a = e.target.closest('a[data-href]');
     if (a && (e.metaKey || e.ctrlKey)) { window.api.openExternal(a.dataset.href); return; }
     const m = e.target.closest('.m[data-k]');
-    if (!m || m.dataset.k === 'ed') return closePop();
+    if (!m || m.dataset.k === 'ed') { closePop(); return explainAtCaret(e); }
     activateIssue(m.dataset.k, { fromText: true, anchor: m });
   });
   paper.addEventListener('keydown', e => {
@@ -550,6 +550,39 @@ function insertTextAt(c, text) {
   const p = S.doc.paragraphs[c.pi];
   p.runs = Model.replaceRange(p.runs, c.off, c.off, text);
   renderPaper(false); setCaret(c.pi, c.off + text.length); onManualEdit();
+}
+
+// Click on unmarked text: if it is a fixed expression (and so has no comma), say why — «и то и другое», § 146.
+let explainSeq = 0;
+async function explainAtCaret(ev) {
+  const sel = getSelection();
+  if (!sel.isCollapsed || S.mode === 'diff') return;
+  const c = caretPos();
+  if (!c || !S.doc.paragraphs[c.pi]) return;
+  const my = ++explainSeq;
+  let r = null;
+  try { r = await window.api.engine('explainSpan', textOf(S.doc.paragraphs[c.pi]), c.off, c.off); } catch { return; }
+  if (my !== explainSeq || !r) return;
+  closePop();
+  popEl = document.createElement('div');
+  popEl.className = 'pop';
+  popEl.style.width = '340px';
+  popEl.innerHTML = `<div style="padding:12px 14px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span class="tag pn">Пунктуация</span><span class="conf">${ic('check', 12, 'currentColor', 3)}Всё верно</span></div>
+    <div style="font-family:'PT Serif',serif;font-size:16px;margin-bottom:6px">${esc(r.idiom)}</div>
+    <div style="font-size:12.5px;line-height:1.5;color:var(--ink2)">${esc(r.note || '')}</div>
+    ${r.definition ? `<div style="font-size:12px;color:var(--muted2);margin-top:6px">Значение: ${esc(r.definition)}</div>` : ''}
+    <div style="display:flex;gap:10px;margin-top:8px;font-size:12px">${(r.ref || []).length ? `<a data-popact="rule" style="color:var(--navy);font-weight:600;cursor:pointer">Правила 1956, § ${r.ref[0]}</a>` : ''}${r.url ? `<a data-popact="wikt" style="color:var(--navy);font-weight:600;cursor:pointer">Викисловарь</a>` : ''}</div></div>`;
+  $('#layer').appendChild(popEl);
+  popEl.style.left = Math.min(window.innerWidth - 360, Math.max(240, ev.clientX - 60)) + 'px';
+  popEl.style.top = Math.min(window.innerHeight - popEl.offsetHeight - 10, ev.clientY + 18) + 'px';
+  popEl.addEventListener('click', e => {
+    e.stopPropagation();
+    const a = e.target.closest('[data-popact]');
+    if (!a) return;
+    closePop();
+    if (a.dataset.popact === 'rule') openRule(r.ref[0]);
+    if (a.dataset.popact === 'wikt') window.api.openExternal(r.url);
+  });
 }
 
 let tipEl = null;

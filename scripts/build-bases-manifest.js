@@ -23,6 +23,7 @@ const MODULES = [
   { id: 'rules', title: 'Правила проверки (данные)', dir: 'rules', license: 'проект «Вычитка»' },
   { id: 'rules1956', title: 'Правила орфографии и пунктуации (1956)', dir: 'reference', license: 'официальный нормативный документ · публикация therules.ru' },
   { id: 'dal', title: 'Толковый словарь Даля (2-е издание)', dir: 'dal', license: 'текст — общественное достояние · оцифровка Викитеки — CC BY-SA 4.0' },
+  { id: 'wiktionary', title: 'Викисловарь: устойчивые сочетания, союзы, вводные слова', dir: 'wiktionary', license: 'CC BY-SA 4.0' },
 ];
 
 function parseArgs(argv) {

@@ -1,5 +1,5 @@
 {
-  "_comment": "Вводные слова и сочетания. confidence — для середины предложения; confidenceStart — в начале. startOnly — обособлять только в начале предложения. skipIfNext/skipIfPrev — слова рядом, при которых это не вводное. skipIfNextGen — пропустить, если дальше существительное/прилагательное в род. п. (кроме того случая…). skipIfNextCase — пропустить при указанном падеже следующего слова.",
+  "_comment": "Вводные слова и сочетания. confidence — для середины предложения; confidenceStart — в начале. startOnly — обособлять только в начале предложения. skipIfNext/skipIfPrev — слова рядом, при которых это не вводное. skipIfNextGen — пропустить, если дальше существительное/прилагательное в род. п. (кроме того случая…). skipIfNextCase — пропустить при указанном падеже следующего слова. Записи с \"source\": \"wiktionary\" добавлены из русского Викисловаря (scripts/fetch-wiktionary.py --merge).",
   "source": "Правила орфографии и пунктуации, 2006 · вводные слова",
   "items": [
     { "text": "конечно же", "confidence": "sure" },
@@ -106,6 +106,26 @@
     { "text": "в свою очередь", "confidence": "check" },
     { "text": "к тому же", "confidence": "check", "startOnly": true },
     { "text": "по словам", "confidence": "skip" },
-    { "text": "по мнению", "confidence": "skip" }
+    { "text": "по мнению", "confidence": "skip" },
+    { "text": "в-шестых", "confidence": "check", "source": "wiktionary" },
+    { "text": "в-седьмых", "confidence": "check", "source": "wiktionary" },
+    { "text": "в-восьмых", "confidence": "check", "source": "wiktionary" },
+    { "text": "в-девятых", "confidence": "check", "source": "wiktionary" },
+    { "text": "в-десятых", "confidence": "check", "source": "wiktionary" },
+    { "text": "вероятнее всего", "confidence": "check", "source": "wiktionary" },
+    { "text": "иными словами", "confidence": "check", "source": "wiktionary" },
+    { "text": "кроме шуток", "confidence": "check", "source": "wiktionary" },
+    { "text": "по идее", "confidence": "check", "skipIfNextGen": true, "source": "wiktionary" },
+    { "text": "имхо", "confidence": "check", "source": "wiktionary" },
+    { "text": "бывало", "confidence": "check", "skipIfPrev": ["не", "ни", "как", "это", "такое", "такого", "что", "всё", "все", "и"], "source": "wiktionary" },
+    { "text": "вестимо", "confidence": "check", "source": "wiktionary" },
+    { "text": "дескать", "confidence": "check", "source": "wiktionary" },
+    { "text": "кажись", "confidence": "check", "source": "wiktionary" },
+    { "text": "знамо", "confidence": "check", "skipIfNext": ["дело"], "source": "wiktionary" },
+    { "text": "мол", "confidence": "check", "skipIfPrev": ["о", "об", "на", "за", "у", "к", "под", "над", "через", "возле", "около", "вдоль", "длинный", "каменный", "бетонный", "старый", "новый", "и"], "source": "wiktionary" },
+    { "text": "следственно", "confidence": "check", "source": "wiktionary" },
+    { "text": "чаятельно", "confidence": "check", "source": "wiktionary" },
+    { "text": "апропо", "confidence": "check", "source": "wiktionary" },
+    { "text": "положим", "confidence": "check", "skipIfPrev": ["мы", "не", "это", "и"], "source": "wiktionary" }
   ]
 }

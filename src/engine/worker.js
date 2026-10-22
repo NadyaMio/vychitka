@@ -16,7 +16,7 @@ const engine = require('./index');
 
 const METHODS = new Set([
   'init', 'setUserWords', 'basesInfo', 'check', 'literary', 'wordInfo', 'compare',
-  'rule', 'searchRules', 'manualRule', 'applyNbsp', 'applyIssues', 'defaultSettings',
+  'rule', 'searchRules', 'manualRule', 'explainSpan', 'applyNbsp', 'applyIssues', 'defaultSettings',
 ]);
 
 function serializeError(err) {

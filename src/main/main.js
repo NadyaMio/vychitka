@@ -115,7 +115,7 @@ function registerIpc() {
     return data;
   });
   ipcMain.handle('engine', async (_e, method, args) => {
-    const allowed = ['check', 'literary', 'wordInfo', 'compare', 'basesInfo', 'applyNbsp', 'rule', 'searchRules', 'manualRule'];
+    const allowed = ['check', 'literary', 'wordInfo', 'compare', 'basesInfo', 'applyNbsp', 'rule', 'searchRules', 'manualRule', 'explainSpan'];
     if (!allowed.includes(method)) throw new Error(`unknown engine method ${method}`);
     return engine.call(method, args);
   });

@@ -10,6 +10,8 @@ const morph = require('./morph');
 const { makeIssue, matchCase } = require('./util');
 const { ABBREVIATIONS } = require('./tokenize');
 const punctExtra = require('./punctextra');
+const idioms = require('./idioms');
+const ltRules = require('./ltrules');
 
 const SRC_ROSENTAL = 'Розенталь · сложноподчинённое предложение';
 const KOTORYJ_FORMS = new Set(['который', 'которая', 'которое', 'которые', 'которого', 'которой', 'которому', 'которую', 'которым', 'которыми', 'которых', 'котором']);
@@ -194,12 +196,12 @@ function adversativeIssue(ctx, sentence, wi, conj) {
       const nextWord = next.type === 'word' ? next : null;
       if (!nextWord) return null;
     }
-    const ref = entry.text === 'а' ? [137, 144] : entry.text === 'то есть' ? [154] : [138, 144];
-    const why = entry.text === 'однако'
+    const ref = entry.ref || (entry.text === 'а' ? [137, 144] : entry.text === 'то есть' ? [154] : [138, 144]);
+    const why = entry.why || (entry.text === 'однако'
       ? 'Если «однако» здесь значит «но», перед ним нужна запятая; если это вводное «впрочем» — выделите с двух сторон.'
       : entry.text === 'то есть'
         ? 'Пояснительный союз «то есть» отделяется запятой.'
-        : `Перед противительным союзом «${entry.text}» ставится запятая.`;
+        : `Перед противительным союзом «${entry.text}» ставится запятая.`);
     return commaIssue(ctx, prevTok, tok, 'punct.comma-adversative', entry.confidence || 'check', why, ref, undefined, { conj: entry.text });
   }
   return null;
@@ -372,7 +374,9 @@ function check(ctx) {
     }
   }
   punctExtra.check(ctx, out);
+  idioms.check(ctx, out); // «и то, и другое» — stray comma inside a cohesive pair (§ 146, note; Викисловарь)
   mechanical(ctx, out);
+  ltRules.check(ctx, out); // LanguageTool rules (bases/rules/lt-punct.json) run last: matches overlapping our issues are dropped
   for (const issue of out) if (!issue.source && !issue.ref.length && !issue.manualRef) issue.source = SRC_ROSENTAL;
   return out;
 }

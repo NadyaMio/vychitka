@@ -21,11 +21,15 @@ const version = () => execFileSync('plutil', ['-extract', 'CFBundleShortVersionS
   const before = await win.evaluate(() => window.api.info());
   console.log('базы до:', before.bases.version);
   const bc = await win.evaluate(() => window.api.basesCheck());
-  console.log('проверка баз:', JSON.stringify({ current: bc.current, remote: bc.remote, newer: bc.newer, changedFiles: bc.changedFiles }));
-  const bu = await win.evaluate(() => window.api.basesUpdate());
-  console.log('обновление баз:', JSON.stringify({ updated: bu.updated, version: bu.version }));
-  const res = await win.evaluate(() => window.api.engine('check', { paragraphs: [{ kind: 'p', text: 'Это кликабельный инфостиль.' }] }));
-  console.log('новые слова после обновления баз:', res.issues.length ? 'ПОМЕЧЕНЫ (ошибка)' : 'не помечаются');
+  console.log('проверка баз:', JSON.stringify({ current: bc.current, remote: bc.remote, newer: bc.newer, compatible: bc.compatible, changedFiles: bc.changedFiles }));
+  if (bc.newer && !bc.compatible) {
+    console.log('базы требуют более новую версию приложения — не скачиваются, как и задумано');
+    const err = await win.evaluate(() => window.api.basesUpdate().then(() => 'скачались (ошибка)', e => e.message));
+    console.log('попытка обновить базы:', err.replace(/^Error invoking remote method '[^']+': (Error: )?/, ''));
+  } else if (bc.newer) {
+    const bu = await win.evaluate(() => window.api.basesUpdate());
+    console.log('обновление баз:', JSON.stringify({ updated: bu.updated, version: bu.version }));
+  }
   const states = [];
   await win.exposeFunction('__upd', s => states.push(s));
   await win.evaluate(() => window.api.onAppUpdate(s => window.__upd(s)));
@@ -40,5 +44,13 @@ const version = () => execFileSync('plutil', ['-extract', 'CFBundleShortVersionS
   await new Promise(r => setTimeout(r, 4000));
   console.log('версия в бандле после обновления:', version());
   try { execFileSync('pkill', ['-f', exe]); } catch { /* relaunched copy may already be gone */ }
-  console.log(fs.existsSync(path.join(userData, 'bases', 'manifest.json')) ? 'скачанные базы на месте' : 'скачанных баз нет');
+  // the updated build starts with its own bundled bases and finds nothing newer
+  const app2 = await electron.launch({ executablePath: exe, env });
+  const w2 = await app2.firstWindow();
+  await w2.waitForSelector('#pasteArea');
+  const i2 = await w2.evaluate(() => window.api.info());
+  const b2 = await w2.evaluate(() => window.api.basesCheck());
+  const dal = await w2.evaluate(() => window.api.engine('wordInfo', 'лебезить'));
+  console.log('после обновления:', JSON.stringify({ version: i2.version, bases: i2.bases.version, newerBases: b2.newer, dal: !!(dal && dal.dal) }));
+  await app2.close();
 })().catch(e => { console.error(e); process.exit(1); });

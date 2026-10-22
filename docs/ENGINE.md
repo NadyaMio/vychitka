@@ -16,6 +16,8 @@ src/engine/
   spelling.js     фразовые правила (rules/phrases.json) + неизвестные слова
   punctuation.js  запятые перед союзами (rules/conj.json), вводные слова (rules/intro.json), «несмотря на», «Однако,», механика знаков
   punctextra.js   проверки по пособию (rules/punct-extra.json): тире между подлежащим и сказуемым, обобщающие слова, повторяющиеся и двойные союзы, «как»/«нежели», обращения, междометия и да/нет, прямая речь, деепричастия и причастные обороты, «кроме/включая»
+  idioms.js       цельные выражения: встроенный список § 146/§ 150 + пары из punct-extra.json + Викисловарь (bases/wiktionary/idioms.json); punct.idiom-no-comma («и то, и другое»), isIdiomSpan() для глушения запятых в других правилах, explainSpan() для интерфейса
+  ltrules.js      интерпретатор правил LanguageTool (rules/lt-punct.json): паттерны grammar.xml поверх нашего токенизатора и Az; теги AOT ↔ граммемы OpenCorpora (AZ_TO_LT); вызывается последним из punctuation.js, наши issues приоритетнее
   grammar.js      в течение / по приезде / согласно + дат. п. / оплатить / одеть-надеть / согласование
   typography.js   тире, кавычки, разряды чисел, многоточие, пробелы, буква ё, applyNbsp()
   repeats.js      повторы леммы в 3 предложениях, одинаковые биграммы
@@ -56,6 +58,8 @@ bases/            все данные (см. bases/LICENSES.md); движок г
 | `reference/punct-manual.json` | 81 правило пунктуации в пересказе пособия Е. П. Чечулиной (2020) с собственными примерами: `searchRules()` ищет и по ним, `manualRule(id)` отдаёт запись, issues ссылаются через `manualRef` | `items[{id, section, title, rule, examples, ref1956, page}]`, `source.url` (PDF оригинала; `url#page=N` в выдаче) |
 | `extra/words.txt` | Слова, которых нет в OpenCorpora; принимаются и их падежные формы (основа + типичное окончание) | по слову в строке |
 | `dal/dal.json.gz` | Словарь Даля, 2-е изд., по Викитеке («ТСД2/…»); собирается `python3 scripts/fetch-dal.py` (скачивание с чекпоинтами в `.cache/dal/`, `--build` — только пересборка) | `articles[{head, text, url}]`, `index` (заглавные слова → статьи), `nested` (слова-гнёзда → статьи); ключи — современная орфография, текст — орфография издания |
+| `rules/lt-punct.json` | 217 правил пунктуации **LanguageTool** (LGPL 2.1+) из `grammar.xml` русского модуля — паттерны, сообщения, подсказки, все 600 примеров и статус калибровки; генерируется `scripts/lt/convert.js`, статусы ставит `scripts/lt/calibrate.js` (см. раздел «Правила LanguageTool» ниже). Вручную не править: пояснения и ссылки — в `scripts/lt/notes.js` | `rules[{key, id, name, pattern, marker, antipatterns, unify, message, suggestions, examples, why, ref, status{enabled, confidence, reason, examples, fp, eval}}]`, `skipped[{id, reason}]`, `source` |
+| `wiktionary/idioms.json`, `conj.json`, `intro.json`, `particles.json`, `meta.json` | Русский Викисловарь (CC BY-SA 4.0): устойчивые сочетания и фразеологизмы, союзы, вводные слова, частицы; собирается `python3 scripts/fetch-wiktionary.py` (чекпоинты в `.cache/wiktionary/`, `--build` — пересборка, `--merge` — слить союзы и вводные в `rules/conj.json`/`intro.json` записями с `source: "wiktionary"`) | `items[{t, d, url, type, role, c}]`: заголовок, первое значение с пометами (≤200 знаков), ссылка, `тип`/`роль` из шаблона `{{phrase}}`, коды категорий (`u` устойчивые, `f` фразеологизмы) |
 
 Все регэкспы в данных пишутся без `\b` (он не работает с кириллицей) — движок оборачивает их в `(?<![\p{L}\p{N}-])(?:…)(?![\p{L}\p{N}-])` с флагами `giu`. Регистр первой буквы замены берётся из текста (`matchCase`).
 
@@ -85,9 +89,45 @@ bases/            все данные (см. bases/LICENSES.md); движок г
 
 **Вводное слово** — строка в `rules/intro.json`; если слово бывает и наречием, добавьте `skipIfPrev`/`skipIfNext` и ставьте `confidence: "check"`.
 
+**Цельное выражение** (внутри которого запятая не ставится) — обычно уже есть в Викисловаре и подхватится при следующей выгрузке `scripts/fetch-wiktionary.py`; выражение, которого там нет, добавьте в `BUILTIN_REPEATED` / `BUILTIN_KAK` в `idioms.js` (пример § 146) или парой в `rules/punct-extra.json` → `homogeneous`. Сопоставление идёт по словам (ё = е, регистр не важен), между словами допускаются пробелы и одна запятая; заголовок с запятой («не кто иной, как») никогда не глушит запятую на этой границе и не «исправляется».
+
 **Новая проверка с кодом** — функция в соответствующем модуле, которая получает `ctx` и возвращает issues через `makeIssue({ para, start, end, category, ruleId, before, after, confidence, why, ref, source })`. Обязательно: `before === text.slice(start, end)`; для вставки запятой фрагмент — «слово + пробел + слово». Затем тест в `test/engine/units.test.js` и прогон `test/engine/false-positives.test.js`.
 
 После правки данных: `node scripts/build-bases-manifest.js 2026.10.2` и `npm run test:engine`.
+
+## Правила LanguageTool (`rules/lt-punct.json`, `src/engine/ltrules.js`)
+
+Источник — `grammar.xml` русского модуля LanguageTool (LGPL 2.1+, <https://languagetool.org>; атрибуция в `bases/LICENSES.md`): категория «Пунктуация» целиком (213 правил в 93 группах; один `<rule>` там закомментирован) и две группы из «Типографики» о сочетаниях знаков (`Wrong_group_punct` — 3 правила, `PUNKT_KAVITCHKI`); остальные правила типографики не взяты — причина у каждого в `skipped`. Конвейер:
+
+```bash
+curl -L -o /tmp/grammar.xml https://raw.githubusercontent.com/languagetool-org/languagetool/master/languagetool-language-modules/ru/src/main/resources/org/languagetool/rules/ru/grammar.xml
+npm run lt:convert -- /tmp/grammar.xml              # XML → bases/rules/lt-punct.json (статусы прежней калибровки сохраняются по key; --fresh — сбросить; --dump — распечатать правила)
+npm run lt:calibrate -- --write                     # прогнать каждое правило на его примерах и чистых текстах, записать status
+npm run lt:calibrate -- --write --eval run.json     # то же + учесть стенд eval:punct (npm run eval:punct -- --set dev --json run.json)
+npm run lt:calibrate -- --rule 'VVODNOE_SLOVO[3]'   # показать срабатывания одного правила на его примерах
+npm run test:engine                                 # test/engine/lt-rules.test.js прогоняет все примеры через engine.check()
+```
+
+**Что интерпретируется** (`ltrules.js`, семантика как в LanguageTool): предложение — массив токенов `[SENT_START, …]`, последний токен несёт ещё и `SENT_END`; пробел — не токен (`spacebefore`); `<token>` с `regexp`, `postag`/`postag_regexp`, `inflected`, `negate`, `negate_pos`, `skip` (поиск вперёд без отката), `min`/`max` (жадно), `chunk` (упрощённый аналог `RussianChunker` для `B-ADJP`/`I-ADJP`/`B-VP`); `<exception>` со `scope="current|previous|next"` (`next` ещё и останавливает `skip`); токен подходит, если **любой** разбор удовлетворяет условию и **ни один** не попадает под исключение — поэтому `exception negate_pos="yes" postag="VB:.*"` значит «все разборы — глагол»; `<antipattern>` иммунизирует покрытые токены; `<unify>` сравнивает классы эквивалентности признаков из того же файла; `<suggestion>`/`<match no include_skipped case_conversion>`; `<or>`, `<unify-ignore>`. Не поддерживаются и помечаются в `skipped`: Java-`<filter>`, `regexp_replace`/`postag_replace` в `<match>`, `<and>`. Ещё две особенности LanguageTool воспроизведены: подсказка, начинающаяся с запятой, замещает и пробел перед совпадением; совпадение в начале предложения сохраняет заглавную букву.
+
+**Теги частей речи.** Паттерны написаны под словарь AOT; каждый разбор Az рендерится в строку того же вида, и регэкспы `postag` применяются без изменений (`AZ_TO_LT` в `ltrules.js`):
+
+| OpenCorpora (Az) | LanguageTool (AOT) | Пример строки |
+|---|---|---|
+| NOUN (anim/inan, Name, Patr, Surn, Abbr) | `NN:Anim\|Inanim\|Name\|Patr:Род:Число:Падеж`, фамилия `NN:Fam:Число:Падеж`, `ABR:Род` | `NN:Inanim:Masc:Sin:Nom` |
+| ADJF (Apro, Supr, Anum) / ADJS / COMP | `ADJ:Posit\|MPR\|Sup:Род или PL:Падеж`, `Ord:…`, `ADJ:Short:Род или PL`, `ADJ:Comp` | `ADJ:MPR:PL:D` |
+| VERB (TEns, impr, Impe) / INFN | `VB:Past:Перех:Вид:Род или PL`, `VB:Real\|Fut:Перех:Вид:Число:Лицо`, `VB:IMP:…:Число:P1\|P2`, `VB:INF[:bezl]:Перех:Вид` | `VB:Past:TRANS:PFV:Masc` |
+| PRTF / PRTS / GRND | `PT:Время:Перех:Вид:DST\|STR:Род или PL:Падеж`, `PT_Short:…:Род или PL`, `DPT:Время:Перех:Вид` | `DPT:Real:INTR:IMPFV` |
+| NUMR | `Num:Род:Падеж` (два, оба) или `NumC:Падеж` (пять) | `NumC:Nom` |
+| NPRO; ADJF Apro «весь» | `PNN:Число:Падеж[:Лицо]` (у «весь» — вдобавок к `ADJ:MPR`, как в AOT) | `PNN:Sin:Nom:P1` |
+| ADVB, PRED, PREP, CONJ, PRCL, INTJ | `ADV`, `PRDC`, `PREP`, `CONJ`, `PARTICLE`, `INTERJECTION` | — |
+| граммема Prnt; слова из `rules/intro.json` | `PARENTHESIS` («мягкий» разбор: учитывается в положительных проверках, но не делает слово неоднозначным для `negate_pos`); у `CONJ,Prnt` тег `CONJ` остаётся только у «однако», «значит», «итак», «следовательно» | — |
+| падежи, число, род, лицо, время, вид, переходность, залог | nomn→Nom, gent/gen1→R, gen2→2R, datv→D, accs→V, ablt→T, loct→P, loc2→2P, voct→Z; sing→Sin, plur→PL; masc/femn/neut→Masc/Fem/Neut; 1per…→P1…; pres/past/futr→Real/Past/Fut; perf/impf→PFV/IMPFV; tran/intr→TRANS/INTR; actv/pssv→DST/STR | — |
+| слово вне словаря, число, латиница, знак | без тега (`UNKNOWN`); разборы Az берутся только от словарных парсеров (Dictionary, Abbr, Hyphen*), однобуквенные сокращения («и» → «исполняющий») отбрасываются | — |
+
+**Статусы** (`status` каждого правила, ставит `calibrate.js`): `enabled: false` — правило выключено в самом LanguageTool (`default="off"/"temp_off"`), помечено там `picky` (LanguageTool включает такие только в строгом режиме; на стенде именно `Prep_i` давал 216 лишних запятых на 19 894 чистых предложениях) или не проходит собственные примеры (`Hyphen_and_spaces` — у нас дефис отдельный токен); иначе `enabled: true`. `confidence: 'sure'` — только если правило проходит все свои примеры строго (границы и подсказки как в LanguageTool), не `picky`, даёт 0 срабатываний на чистых текстах (`test/engine/fp-texts.js`) и на корректных примерах всех правил, не входит в `CONFIDENCE_CAP` (`scripts/lt/notes.js`: спорные удаления запятой — «шёл, улыбаясь», «, как …», «мать и дочь два дня»), не содержит оговорок в сообщении LanguageTool («возможно», «обычно», «допустима») и на стенде `eval:punct` не показало ложных правок не меньше верных (или ≥ 2 на чистых предложениях); всё остальное — `check`. Итог калибровки 2026-10-22: 217 правил / 95 групп, включено 164 (111 `sure`), выключено 53 (43 picky, 8 off в LanguageTool, 2 не проходят примеры); из 600 примеров LanguageTool 99,3 % ведут себя как в оригинале, у включённых правил — 100 % через `engine.check()`. Стенд `eval:punct --set dev`, sure / sure+check: recall 15,9 → 16,0 % / 22,2 → 22,9 %, precision 90,0 → 90,0 % / 82,2 → 81,2 %, лишних на чистых 105 → 108 / 520 → 562.
+
+**Как устроен issue:** `category: 'punctuation'`, `ruleId: 'lt.<ID группы LanguageTool>'`, `meta: { kind: 'lt', key }` (подправило), `before`/`after` по `<marker>` и первой `<suggestion>` (остальные — в `alternatives`; правило без подсказки даёт `after === before`), `why` — пересказ из `WHY_BY_GROUP` (иначе сообщение LanguageTool), `ref` — параграфы 1956 г. из `REF_BY_GROUP`, `source` — «LanguageTool · <название правила>» (при `ref` — стандартный «Правила 1956 · § N»). Внутри кавычек и прямой речи (при `skipQuotes`) совпадения, целиком лежащие внутри, не выдаются. Совпадение, пересекающееся с любым issue наших правил, отбрасывается; между собой правила LanguageTool делят место так: `sure` важнее `check`, подсказка важнее сигнала, длиннее важнее короче.
 
 ## API (`src/engine/index.js`)
 
@@ -101,6 +141,7 @@ wordInfo(word, { para, start, end, doc })
 compare(aDoc, bDoc, { appliedFixes })
 rule(n)                               // параграф Правил 1956 г. или null
 searchRules(query, limit = 20)        // [{ n, section, group, url, snippet, score }]
+explainSpan(paragraphText, start, end) // { idiom, note, ref, kind, start, end, url, definition, source } | null — цельное выражение вокруг позиции/выделения («запятая не нужна: устойчивое выражение, § 146»)
 applyNbsp(text)                       // неразрывные пробелы для экспорта
 applyIssues(doc, issues)              // применить after ≠ before, вернуть новый doc
 defaultSettings()
@@ -112,7 +153,9 @@ defaultSettings()
 
 ## Что работает ненадёжно
 
-- Запятые ставятся по спискам союзов и стоп-слов, без синтаксического разбора. Всё, что не «что/чтобы/если/который после глагола или существительного», отдаётся как `check`. Сравнительные обороты с «как» не трогаем вовсе (§ 150).
+- Запятые ставятся по спискам союзов и стоп-слов, без синтаксического разбора. Всё, что не «что/чтобы/если/который после глагола или существительного», отдаётся как `check`. Сравнительные обороты с «как» — только `check`, и они молчат внутри устойчивых оборотов из `punct-extra.json` и Викисловаря (§ 150).
+- Правила LanguageTool опираются на словарь AOT, а у нас OpenCorpora: там, где словари расходятся (у Az «ещё» ещё и частица, «всем» — только прилагательное-местоимение, «оказывается» — ещё и вводное), правило может промолчать или сработать иначе; `picky`-правила LanguageTool (в том числе запятая перед «и» в сложном предложении, `Prep_i`) выключены как источник ложных срабатываний. Правила «запятая не нужна» для расчленяемых союзов («после того, как», «тем не менее,») намеренно только `check`.
+- `punct.idiom-no-comma` снимает запятую только в парах с «и… и» / «ни… ни» (примечание к § 146) и только когда выражение не продолжается третьим членом («и так, и этак, и сяк» — ряд). Пары с «то… то», «либо… либо» из Викисловаря лишь глушат предложение запятой, сами запятую не снимают.
 - Вводные слова, совпадающие с наречиями («кстати», «возможно», «действительно», «значит», «кажется»), — `check`; часть из них проверяется только в начале предложения.
 - «В итоге», «в конце концов», «наконец», «правда» намеренно не считаются вводными (Розенталь), хотя ТЗ их упоминает.
 - Согласование прилагательного с существительным проверяется только для однозначных расхождений в числе и роде; падежные — нет (слишком много омонимии).
