@@ -235,6 +235,57 @@ function isParticiple(tok) {
   return allPos(tok, new Set(['PRTF']));
 }
 
+/** Verb-like in the wide sense: finite verb, short form, predicative, gerund or infinitive. */
+function isVerbish(tok) {
+  return isVerbLike(tok) || isInfinitive(tok);
+}
+
+const CASE_BEARING = new Set(['ADJF', 'PRTF', 'NPRO', 'NUMR']);
+
+/** Cases of the nominal readings: noun readings when there are any, otherwise adjective / pronoun / numeral readings. */
+function caseSet(tok) {
+  const out = new Set();
+  const ps = parsesOf(tok);
+  const nouns = ps.filter((p) => p.tag.POS === 'NOUN');
+  const use = nouns.length ? nouns : ps.filter((p) => CASE_BEARING.has(p.tag.POS));
+  for (const p of use) if (p.tag.CAse && (!nouns.length || use.length === 1 || p.score >= 0.05)) out.add(p.tag.CAse);
+  return out;
+}
+
+/**
+ * Could `a` and `b` be two members of one homogeneous row («лёд и огонь», «пришёл и сел», «быстро и легко»)?
+ * Both finite verbs, both infinitives, both adverbs, or nominals sharing a case (accusative alone is too
+ * ambiguous to count unless it is the only reading of both).
+ */
+function sameRow(a, b) {
+  if (isFiniteVerb(a) && isFiniteVerb(b)) return true;
+  if (isInfinitive(a) && isInfinitive(b)) return true;
+  if (allPos(a, new Set(['ADVB'])) && allPos(b, new Set(['ADVB']))) return true;
+  const ca = caseSet(a);
+  const cb = caseSet(b);
+  if (!ca.size || !cb.size) return false;
+  const shared = [...ca].filter((c) => cb.has(c));
+  return shared.some((c) => c !== 'accs') || (shared.length > 0 && ca.size === 1 && cb.size === 1);
+}
+
+/** Adverb or particle (every reading): skipped when looking for the head of a row member. */
+function isAdverbial(tok) {
+  return allPos(tok, new Set(['ADVB', 'PRCL']));
+}
+
+/** First word from sentence word index k (adjacent run) that is not an adverb/particle, or null. */
+function rowHead(ctx, sentence, k) {
+  const words = sentence.words;
+  for (let j = k; j < words.length && j < k + 3; j++) {
+    const t = ctx.tokens[words[j]];
+    if (j > k && !adjacentTokens(ctx, ctx.tokens[words[j - 1]], t)) return null;
+    if (!isAdverbial(t)) return t;
+  }
+  return null;
+}
+
+const NI_QUANTITY_NEXT = new Set(['один', 'одна', 'одно', 'одного', 'одной', 'одним', 'одном', 'одни', 'одних', 'разу', 'капли', 'слова', 'шагу', 'грамма', 'секунды', 'минуты', 'копейки', 'малейшего', 'малейшей', 'малейшим']);
+
 /** All lemmas of the dictionary parses with the given POS. */
 function lemmasOf(tok, pos) {
   const out = new Set();
@@ -673,6 +724,29 @@ function repeatedConj(ctx, sentence, wi, X, out) {
     if (!afterTok || !adjacentTokens(ctx, ctx.tokens[words[second + unit.length - 1]], afterTok)) return;
     if (key === 'и' && (['т', 'так', 'тому', 'потому', 'вот', 'даже', 'только', 'уже', 'ещё', 'еще', 'тогда', 'значит', 'поэтому', 'пр', 'всё', 'все', 'вообще', 'наоборот', 'правда', 'главное'].includes(afterTok.lower))) return;
     if (key === 'ни' && ['один', 'одна', 'одно', 'одного', 'одной', 'разу', 'капли', 'слова', 'шагу', 'за', 'к', 'в', 'на', 'о', 'с', 'у', 'при', 'по', 'от', 'из', 'под'].includes(afterTok.lower) && between.length === 1 && hasPos(between[0], 'PREP')) return;
+    // «ни один из них нельзя считать ни полным, ни точным» — the first «ни» belongs to a pronoun phrase, not to the row
+    if (key === 'ни' && NI_QUANTITY_NEXT.has(between[0].lower)) return;
+    if (key === 'и' || key === 'или' || key === 'либо') {
+      // the first conjunction opens a clause, not a row member: «и если …», «и не только …», «и вот …»
+      if (hasPos(between[0], 'CONJ') || hasPos(between[0], 'PRCL')) return;
+      // the first conjunction joins predicates or clauses while the second joins objects:
+      // «интересуется историей и часто посещает музеи и выставки», «результаты оказались рассчитанными и предсказанными».
+      // Heads are compared past leading adverbs, so «и опять поднималась, и опять делала» survives.
+      const verbInside = between.some((t) => isVerbLike(t) && !hasPos(t, 'GRND'));
+      if (verbInside) {
+        const leftHead = between.find((t) => !isAdverbial(t)) || between[0];
+        const rightHead = rowHead(ctx, sentence, second + unit.length) || afterTok;
+        if (!(isVerbish(leftHead) && isVerbish(rightHead))) return;
+      }
+      // the word before the first conjunction is a member of the same row as the word after it — a single «и» between two
+      // members, not «и X, и Y»: «лёд и огонь, коты и собаки», «серые дома и мостовые, угрюмые лица и сумерки».
+      // A three-member row «пришёл и сел и начал» (one word between) keeps its comma.
+      const prevOfFirst = wi > 0 ? ctx.tokens[words[wi - 1]] : null;
+      if (between.length >= 2 && prevOfFirst && prevOfFirst.type === 'word' && adjacentTokens(ctx, prevOfFirst, tok) && sameRow(prevOfFirst, between[0])) return;
+      if (isVerbish(afterTok) !== isVerbish(between[0]) && !PERSONAL.has(between[0].lower)) return; // «цедру и сушить»
+      // reduplication: «снова и снова», «ждал и ждал»
+      if (afterTok.lower === between[between.length - 1].lower) return;
+    }
     // idioms: «ни свет ни заря», «и так и сяк»
     const idioms = key === 'ни' ? X.homogeneous.niIdioms : key === 'и' ? X.homogeneous.iIdioms : [];
     const bet = between.map((t) => t.lower).join(' ');
