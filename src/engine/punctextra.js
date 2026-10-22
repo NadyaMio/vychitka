@@ -1278,12 +1278,15 @@ const PRONOUN_AGREE = { 'я': { per: '1per', nmbr: 'sing' }, 'ты': { per: '2pe
 function agreeingPredicate(ctx, sentence, k, feat) {
   const words = sentence.words;
   let seen = 0;
-  for (let j = k; j < words.length && seen < 4; j++, seen++) {
+  for (let j = k; j < words.length && seen < 5; j++, seen++) {
     const t = ctx.tokens[words[j]];
     if (j > k && !adjacentTokens(ctx, ctx.tokens[words[j - 1]], t)) return null;
     if (PRED_SKIP.has(t.lower)) continue;
     const ps = parsesOf(t);
     if (!ps.length) return null;
+    // adverbs, particles, object pronouns, predicative modifiers («я один», «он сам») and infinitives before the finite verb
+    // («я даже лезть не буду», «они периодически задумывались») are stepped over
+    if (isAdverbial(t) || (hasPos(t, 'NPRO') && !PERSONAL.has(t.lower)) || isAdjOnly(t) || hasPos(t, 'NUMR') || ps.every((p) => p.tag.POS === 'INFN')) continue;
     const verbs = ps.filter((p) => p.tag.POS === 'VERB');
     if (verbs.length && (verbs.length === ps.length || verbs.some((p) => p.score >= 0.5))) {
       const ok = verbs.some((p) => {
@@ -1330,6 +1333,39 @@ function subjectAt(ctx, sentence, k) {
   return null;
 }
 
+/** Number and (singular) gender of a subject token (personal pronoun or noun), or null. */
+function subjectFeat(tok) {
+  if (PRONOUN_AGREE[tok.lower]) return PRONOUN_AGREE[tok.lower];
+  const ns = nounParses(tok).filter((p) => p.tag.CAse === 'nomn');
+  return ns.length ? { nmbr: ns[0].tag.NMbr, gndr: ns[0].tag.NMbr === 'sing' ? ns[0].tag.GNdr : undefined } : null;
+}
+
+/**
+ * «и начнётся революция»: finite verb at word index k, then (after up to two modifiers) a nominative-only noun that agrees with it.
+ * A transitive verb that agrees with `leftFeat` (the subject of the left part) is taken as a homogeneous predicate
+ * («студенты читают лекции и делают задания»); an intransitive one followed by a nominative-only noun has its own subject.
+ */
+function invertedClause(ctx, sentence, k, leftFeat) {
+  const words = sentence.words;
+  const v = ctx.tokens[words[k]];
+  if (!v || !leftFeat || !isFiniteVerbStrict(v) || isImperative(v)) return null;
+  const vp = parsesOf(v).filter((p) => p.tag.POS === 'VERB');
+  if (!vp.length || vp.some((p) => p.tag.PErs === '1per' || p.tag.PErs === '2per')) return null;
+  const agreesLeft = vp.some((p) => (!p.tag.NMbr || p.tag.NMbr === leftFeat.nmbr) && !(p.tag.TEns === 'past' && p.tag.NMbr === 'sing' && p.tag.GNdr && leftFeat.gndr && p.tag.GNdr !== leftFeat.gndr));
+  const intransitive = vp.every((p) => p.tag.TRns === 'intr');
+  if (agreesLeft && !intransitive) return null;
+  for (let j = k + 1; j <= k + 3 && j < words.length; j++) {
+    const t = ctx.tokens[words[j]];
+    if (!adjacentTokens(ctx, ctx.tokens[words[j - 1]], t)) return null;
+    if (isAdjOnly(t)) continue;
+    if (!isNomOnlyNoun(t) || hasPos(t, 'ADVB') || isVerbLike(t)) return null;
+    const ns = nounParses(t).filter((p) => p.tag.CAse === 'nomn');
+    const ok = vp.some((p) => (!p.tag.NMbr || p.tag.NMbr === ns[0].tag.NMbr) && !(p.tag.TEns === 'past' && p.tag.NMbr === 'sing' && p.tag.GNdr && ns[0].tag.GNdr && p.tag.GNdr !== ns[0].tag.GNdr));
+    return ok ? { subj: { end: j, feat: {}, kind: 'noun' }, pred: { tok: v, kind: 'verb' } } : null;
+  }
+  return null;
+}
+
 /**
  * «Поговорила с директором и он обещал позвонить» → «директором, и он обещал»: «и» joins two clauses with their own
  * subjects — a compound sentence (§ 137). Left part: a clause with a finite verb that is not a subordinate clause
@@ -1345,12 +1381,12 @@ function compoundAnd(ctx, sentence, wi, out) {
   if (COORD.has(prev.lower) || prev.lower === 'как' || prev.lower === 'так' || prev.lower === 'также' || prev.lower === 'тоже') return;
   if (sentenceEndsWith(ctx, sentence, ['?', '!'])) return;
   // left clause: back to the previous mark (numbers count as words: «мне было 16 и я…»); must contain a finite verb and must not open with a subordinator
-  const left = segmentBefore(ctx, tok, 20);
-  if (!left.length || left.length > 20) return;
+  const left = segmentBefore(ctx, tok, 30);
+  if (!left.length || left.length > 30) return;
   const leftStart = left[0];
   if (CLAUSE_OPENERS.has(leftStart.lower) || leftStart.lower === 'и' || leftStart.lower === 'ни') return;
   if (left.some((t) => CLAUSE_OPENERS.has(t.lower) && t !== leftStart && ['кто', 'что', 'который', 'которые', 'которая', 'которое', 'где', 'когда', 'если', 'чтобы', 'пока', 'хотя', 'как'].includes(t.lower))) return; // a subordinate clause without its comma inside the left part — too unclear
-  const leftVerb = left.find((t) => isFiniteVerb(t) && !hasPos(t, 'GRND') && !isImperative(t));
+  const leftVerb = left.find((t) => isFiniteVerb(t) && !hasPos(t, 'GRND')); // an imperative counts too: «положите смартфон в коробку, и ваша девушка не сможет…»
   if (!leftVerb) return;
   if (left.some((t) => t.lower === 'и' || t.lower === 'ни') && !PERSONAL.has(left[0].lower)) return; // «и X и Y» rows / repeated conjunctions — leave to the repeated-conjunction rule
   // right clause: [adverb] subject + predicate
@@ -1370,13 +1406,20 @@ function compoundAnd(ctx, sentence, wi, out) {
     if (first !== ctx.tokens[words[k]]) return;
     if (!adverbBefore || k === wi + 1) return;
   }
-  const subj = subjectAt(ctx, sentence, k);
-  if (!subj) return;
-  const pred = agreeingPredicate(ctx, sentence, subj.end + 1, subj.feat);
-  if (!pred) return;
+  let subj = subjectAt(ctx, sentence, k);
+  let pred = subj ? agreeingPredicate(ctx, sentence, subj.end + 1, subj.feat) : null;
+  if (!subj && !adverbBefore) {
+    // inversion: «и начнётся революция», «и наступила тишина», «и разгорится новая история» — finite verb, then a nominative-only noun.
+    // Only when the left part has its own subject that does not agree with that verb: «веками бьются и трудятся люди»,
+    // «студенты читают лекции и делают задания» are homogeneous predicates sharing one subject
+    const leftSubj = left.find((t) => PERSONAL.has(t.lower) || isProperNom(t) || (isNomOnlyNoun(t) && !isVerbLike(t)));
+    const inv = leftSubj ? invertedClause(ctx, sentence, k, subjectFeat(leftSubj)) : null;
+    if (inv) { subj = inv.subj; pred = inv.pred; }
+  }
+  if (!subj || !pred) return;
   if (subj.kind === 'eto' && pred.kind !== 'verb' && !['было', 'будет', 'стало', 'значит', 'есть'].includes(pred.tok.lower)) return;
   // the same pronoun as the left subject right before the verb («он встал и он же сел») is fine, but «и» + object pronoun is not a subject — handled by PERSONAL (nominative forms only)
-  const sure = subj.kind === 'pronoun' && !adverbBefore && pred.kind === 'verb' && pred.tok.i === ctx.tokens[words[subj.end + 1]].i
+  const sure = subj.kind === 'pronoun' && !adverbBefore && pred.kind === 'verb' && subj.end + 1 < words.length && pred.tok.i === ctx.tokens[words[subj.end + 1]].i
     && left.length >= 2 && (PERSONAL.has(leftStart.lower) || left.some((t) => isNomOnlyNoun(t) || isProperNom(t)) || isFiniteVerb(leftStart));
   out.push(commaAfter(ctx, prev, tok, {
     ruleId: 'punct.comma-compound-and',
