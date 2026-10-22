@@ -20,6 +20,25 @@ const CHEJ_FORMS = new Set(['чей', 'чья', 'чьё', 'чье', 'чьи', '�
 const RELATIVE_WORDS = new Set(['что', 'кто', 'чем', 'чего', 'чему', 'ком', 'кого', 'кому', 'кем', 'где', 'куда', 'откуда']);
 const NESMOTRYA_PRONOUNS = new Set(['я', 'ты', 'он', 'она', 'оно', 'мы', 'вы', 'они', 'все', 'всё', 'это', 'никто', 'ничто', 'каждый', 'многие', 'некоторые', 'кто-то', 'что-то', 'нам', 'мне', 'ему', 'ей', 'им', 'вам', 'тебе']);
 const COORD_BEFORE_INTRO = new Set(['а', 'и', 'но', 'да']);
+const PARTICLE_BEFORE_INTRO = new Set(['ну', 'уж', 'вот', 'ведь']);
+const PERSONAL_NOM = new Set(['я', 'ты', 'он', 'она', 'оно', 'мы', 'вы', 'они']);
+const PHRASE_OPENING_INTRO = new Set(['например', 'в частности', 'к примеру', 'главным образом', 'скажем', 'допустим', 'положим']);
+
+/** Noun whose only readings are nominative (a safe subject): «масса», «банкир». */
+function isNomOnlyNoun(tok) {
+  const nouns = morph.dictParses(tok.text).filter((p) => p.tag.POS === 'NOUN');
+  if (!nouns.length) return false;
+  return nouns.every((p) => p.tag.CAse === 'nomn');
+}
+
+/** Noun, adjective, numeral, capitalised name or number — a word that can head a nominal phrase («например романы», «в частности России»). */
+function isNominalHead(tok) {
+  if (tok.type === 'num') return true;
+  if (tok.type !== 'word') return false;
+  if (tok.cap) return true;
+  const ps = morph.dictParses(tok.text);
+  return ps.length > 0 && ps.some((p) => ['NOUN', 'ADJF', 'PRTF', 'NUMR'].includes(p.tag.POS)) && !ps.some((p) => ['NPRO', 'VERB', 'INFN', 'ADVB', 'PRED', 'CONJ', 'PRCL', 'PREP'].includes(p.tag.POS));
+}
 
 function compileIntro(items) {
   return items
@@ -214,11 +233,13 @@ function introIssue(ctx, sentence, wi, intro) {
     if (!matchEntry(ctx, sentence, wi, entry)) continue;
     const atStart = wi === 0;
     if (entry.startOnly && !atStart) return null;
+    if (!atStart && tok.cap) return null; // «Слово Например излечивает…» — a quoted/mentioned word, not an intro word
     const lastTok = ctx.tokens[words[wi + entry.words.length - 1]];
     const prevTok = ctx.prevTokenBefore(tok.start);
     const prevWord = prevTok && prevTok.type === 'word' && prevTok.si === tok.si ? prevTok : null;
     const nextTok = ctx.nextTokenFrom(lastTok.end);
     const nextWord = nextTok && nextTok.type === 'word' && nextTok.si === tok.si ? nextTok : null;
+    if (entry.strict && !(ctx.settings && ctx.settings.strict)) return null; // noisy entries live in the strict mode only
     if (entry.skipIfPrev && prevWord && entry.skipIfPrev.includes(prevWord.lower)) return null;
     if (entry.skipIfNext && nextWord && entry.skipIfNext.includes(nextWord.lower)) return null;
     if (nextWord && (nextWord.lower === 'ли' || nextWord.lower === 'бы')) return null;
@@ -226,9 +247,17 @@ function introIssue(ctx, sentence, wi, intro) {
     if (entry.text === 'значит' && ((prevWord && punctExtra.isInfinitive(prevWord)) || (nextWord && punctExtra.isInfinitive(nextWord)))) return null;
     if (entry.skipIfNextGen && nextWord && morph.dictParses(nextWord.text).some((p) => p.tag.CAse === 'gent' && ['NOUN', 'ADJF', 'NPRO'].includes(p.tag.POS))) return null;
     if (entry.skipIfNextCase && nextWord && morph.dictParses(nextWord.text).some((p) => entry.skipIfNextCase.includes(p.tag.CAse) && ['NOUN', 'ADJF', 'NPRO'].includes(p.tag.POS))) return null;
+    if (entry.skipIfNextPos && nextWord && morph.dictParses(nextWord.text).some((p) => entry.skipIfNextPos.includes(p.tag.POS))) return null;
+    if (entry.skipIfPrevPos && prevWord && morph.dictParses(prevWord.text).some((p) => entry.skipIfPrevPos.includes(p.tag.POS))) return null;
+    // a subject right before the word: «масса кажется устойчивой», «банкир может быть отстранён» — a predicate, not an intro word
+    if (entry.skipIfPrevNom && prevWord && (PERSONAL_NOM.has(prevWord.lower) || isNomOnlyNoun(prevWord))) return null;
+    // mid-sentence «возможно использование», «может быть кирпич» — a predicate with its subject after it
+    if (entry.skipIfNextNom && !atStart && prevWord && nextWord && !nextWord.cap && morph.dictParses(nextWord.text).some((p) => p.tag.CAse === 'nomn' && ['NOUN', 'ADJF', 'PRTF'].includes(p.tag.POS)) && !morph.dictParses(nextWord.text).some((p) => p.tag.POS === 'NPRO')) return null;
     let needBefore = !atStart && prevTok && prevTok.type !== 'punct' && prevTok.si === tok.si;
-    if (needBefore && prevWord && COORD_BEFORE_INTRO.has(prevWord.lower)) needBefore = false;
-    const needAfter = nextTok && nextTok.type !== 'punct' && nextTok.si === tok.si;
+    if (needBefore && prevWord && (COORD_BEFORE_INTRO.has(prevWord.lower) || PARTICLE_BEFORE_INTRO.has(prevWord.lower))) needBefore = false; // «и, конечно» / «ну конечно» — no comma after the conjunction or particle
+    let needAfter = nextTok && nextTok.type !== 'punct' && nextTok.si === tok.si;
+    // «например», «в частности» opening an isolated clarifying phrase («книги, например романы») are not separated from it (§ 155, Розенталь § 25 п. 4)
+    if (needAfter && !atStart && PHRASE_OPENING_INTRO.has(entry.text) && nextWord && isNominalHead(nextWord) && (!prevWord || prevWord.type === 'word' && morph.dictParses(prevWord.text).some((p) => p.tag.POS === 'NOUN'))) needAfter = false;
     if (!needBefore && !needAfter) return null;
     const startTok = needBefore ? prevWord : tok;
     const endTok = needAfter ? nextWord : lastTok;

@@ -125,7 +125,7 @@ test('typography: dashes, quotes, numbers, ё modes, nbsp', async () => {
 
 test('settings: toggles and uncertain=skip', async () => {
   await ready();
-  const text = ['Наверное мы опоздаем, но не смотря на усталость все согласились.'];
+  const text = ['Кажется мы опоздаем, но не смотря на усталость все согласились.']; // «кажется» — check, «не смотря» — sure
   const all = engine.check(doc(text));
   assert.ok(all.issues.some((is) => is.confidence === 'check'));
   const sure = engine.check(doc(text), { uncertain: 'skip' });
