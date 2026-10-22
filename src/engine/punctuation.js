@@ -9,6 +9,7 @@
 const morph = require('./morph');
 const { makeIssue, matchCase } = require('./util');
 const { ABBREVIATIONS } = require('./tokenize');
+const punctExtra = require('./punctextra');
 
 const SRC_ROSENTAL = 'Розенталь · сложноподчинённое предложение';
 const KOTORYJ_FORMS = new Set(['который', 'которая', 'которое', 'которые', 'которого', 'которой', 'которому', 'которую', 'которым', 'которыми', 'которых', 'котором']);
@@ -219,6 +220,8 @@ function introIssue(ctx, sentence, wi, intro) {
     if (entry.skipIfPrev && prevWord && entry.skipIfPrev.includes(prevWord.lower)) return null;
     if (entry.skipIfNext && nextWord && entry.skipIfNext.includes(nextWord.lower)) return null;
     if (nextWord && (nextWord.lower === 'ли' || nextWord.lower === 'бы')) return null;
+    // «Жить значит бороться» — «значит» links subject and predicate (dash, see punctextra), not an intro word
+    if (entry.text === 'значит' && ((prevWord && punctExtra.isInfinitive(prevWord)) || (nextWord && punctExtra.isInfinitive(nextWord)))) return null;
     if (entry.skipIfNextGen && nextWord && morph.dictParses(nextWord.text).some((p) => p.tag.CAse === 'gent' && ['NOUN', 'ADJF', 'NPRO'].includes(p.tag.POS))) return null;
     if (entry.skipIfNextCase && nextWord && morph.dictParses(nextWord.text).some((p) => entry.skipIfNextCase.includes(p.tag.CAse) && ['NOUN', 'ADJF', 'NPRO'].includes(p.tag.POS))) return null;
     let needBefore = !atStart && prevTok && prevTok.type !== 'punct' && prevTok.si === tok.si;
@@ -368,9 +371,10 @@ function check(ctx) {
       if (issue) out.push(issue);
     }
   }
+  punctExtra.check(ctx, out);
   mechanical(ctx, out);
-  for (const issue of out) if (!issue.source && !issue.ref.length) issue.source = SRC_ROSENTAL;
+  for (const issue of out) if (!issue.source && !issue.ref.length && !issue.manualRef) issue.source = SRC_ROSENTAL;
   return out;
 }
 
-module.exports = { check, compileIntro, compileConj, matchCase };
+module.exports = { check, compileIntro, compileConj, compileExtra: punctExtra.compileExtra, matchCase };

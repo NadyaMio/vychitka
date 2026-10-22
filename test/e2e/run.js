@@ -78,6 +78,9 @@ async function step(name, fn) {
     await win.waitForSelector('.pop', { timeout: 10000 });
     await win.waitForTimeout(300);
     await shot('04-word');
+    await win.click('.pop [data-tab=dal]');
+    await win.waitForFunction(() => /Даля|Открыть на Викитеке/.test(document.querySelector('.pop').innerText), null, { timeout: 10000 });
+    assert(await win.$('.pop'), 'карточка закрылась при переключении вкладки');
     await win.keyboard.press('Escape');
   });
 
@@ -179,6 +182,11 @@ async function step(name, fn) {
     await win.fill('#ruleQ', 'однородные');
     await win.waitForSelector('[data-rule-n]', { timeout: 10000 });
     await shot('09-rules');
+    await win.fill('#ruleQ', 'обращение');
+    await win.waitForSelector('[data-manual-id]', { timeout: 10000 });
+    await win.click('[data-manual-id] >> nth=0');
+    await win.waitForSelector('.modal >> text=Пособие по пунктуации');
+    await shot('09-manual-rule');
     await win.keyboard.press('Escape');
   });
 

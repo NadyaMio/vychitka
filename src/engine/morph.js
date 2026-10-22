@@ -211,7 +211,7 @@ function describeTag(tag) {
     if (tag.PErs) out.push(PERSONS[tag.PErs]);
     if (tag.TEns === 'past' && tag.NMbr === 'sing' && tag.GNdr) out.push(GENDERS[tag.GNdr]);
     if (tag.NMbr) out.push(NUMBERS[tag.NMbr]);
-    if (tag.MOOd === 'impr') out.push('повел. накл.');
+    if (tag.impr || tag.MOOd === 'impr') out.push('повел. накл.');
   } else if (pos === 'INFN') {
     out.push('неопр. ф.');
   } else if (pos === 'GRND') {

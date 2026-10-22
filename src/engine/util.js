@@ -173,15 +173,20 @@ function resolveOverlaps(issues, rank, standalone) {
       continue;
     }
     const meta = issue.meta;
-    if (meta && meta.kind === 'comma-before' && typeof meta.conjStart === 'number' && hit.start >= meta.conjStart && meta.conjStart > issue.start) {
-      const before = issue.before.slice(0, meta.conjStart - issue.start);
-      const trimmed = {
-        ...issue,
-        end: meta.conjStart,
-        before,
-        after: before.replace(/(\s+)$/, ',$1'),
-      };
-      if (trimmed.after !== trimmed.before && !overlaps(trimmed)) kept.push(trimmed);
+    if (meta && meta.kind === 'comma-before' && typeof meta.conjStart === 'number' && meta.conjStart > issue.start) {
+      if (hit.start >= meta.conjStart) {
+        // the conflict is on the conjunction: keep «слово » → «слово, »
+        const before = issue.before.slice(0, meta.conjStart - issue.start);
+        const trimmed = { ...issue, end: meta.conjStart, before, after: before.replace(/(\s+)$/, ',$1') };
+        if (trimmed.after !== trimmed.before && !overlaps(trimmed)) kept.push(trimmed);
+      } else if (hit.end <= meta.conjStart && hit.end > issue.start) {
+        // the conflict is on the word before the conjunction («Коллеги напоминаю» + «напоминаю что»): keep « что» → «, что»
+        const before = issue.before.slice(hit.end - issue.start);
+        if (/^\s/.test(before)) {
+          const trimmed = { ...issue, start: hit.end, before, after: ',' + before };
+          if (!overlaps(trimmed)) kept.push(trimmed);
+        }
+      }
     }
   }
   return kept.sort((a, b) => a.para - b.para || a.start - b.start || a.end - b.end);

@@ -1,11 +1,11 @@
 {
-  "version": "2026.10.2",
-  "date": "2026-10-21",
+  "version": "2026.10.3",
+  "date": "2026-10-22",
   "files": [
     {
       "path": "LICENSES.md",
-      "size": 4956,
-      "sha256": "3eb88ca7248aa589092164f22ccb89ec14810e9fed4d76a1a8dc3c6c56ae8db0"
+      "size": 9616,
+      "sha256": "b6b008147ae04bb2bc5209f0ce442ae7d2ce21cb04457746b3bd7ffe976753e7"
     },
     {
       "path": "az/grammemes.json",
@@ -63,6 +63,16 @@
       "sha256": "b4c5ea5632e2d80eaf316f85f2177c8a28b74484c6efdb70d9cc1bf36848f182"
     },
     {
+      "path": "dal/dal.json.gz",
+      "size": 9869061,
+      "sha256": "4cfe6c61303c1ab6525fc834ba2a89d174456523ea3ecebe57e04d878f812765"
+    },
+    {
+      "path": "dal/meta.json",
+      "size": 921,
+      "sha256": "5fc285dfb428d7657e888f76d95979dfb23a291813d25d90b1d48703c29b7fe7"
+    },
+    {
       "path": "extra/words.txt",
       "size": 8566,
       "sha256": "8af688023527272c62a2462172a152f31ee77a3c6e253758fcf95c2d5c3de757"
@@ -71,6 +81,11 @@
       "path": "freq/ru_50k.txt",
       "size": 998861,
       "sha256": "6095f507cc167488ec66ada5a85ac50433503a08ad24a07c6eabdf54352c4e7f"
+    },
+    {
+      "path": "reference/punct-manual.json",
+      "size": 55801,
+      "sha256": "68513d181f92048f2de8e44e5d4b3a43de907e38040e650f9447cd70dc7118e7"
     },
     {
       "path": "reference/rules-1956.json",
@@ -118,6 +133,11 @@
       "sha256": "70bbf47fa7883eea915ea66032f9f93ab8794c6fcef0d11eae6d04539bf8a610"
     },
     {
+      "path": "rules/punct-extra.json",
+      "size": 74920,
+      "sha256": "141bb521f534cc920064b8af8fff3d2ddaa5b61b26f7654f3535df2fb06485e4"
+    },
+    {
       "path": "rules/yo.json",
       "size": 4032,
       "sha256": "d5c173c9a015b709953e5acf4b5c2b0ec1aeecc83cca18be3d240e9ba1cca1e1"
@@ -131,7 +151,7 @@
       "license": "CC BY-SA 4.0 (данные) · MIT (Az.js)",
       "files": 11,
       "bytes": 11177662,
-      "version": "2026.10.2",
+      "version": "2026.10.3",
       "status": "builtin"
     },
     {
@@ -141,7 +161,7 @@
       "license": "CC BY-SA 4.0",
       "files": 1,
       "bytes": 998861,
-      "version": "2026.10.2",
+      "version": "2026.10.3",
       "status": "builtin"
     },
     {
@@ -151,7 +171,7 @@
       "license": "проект «Вычитка»",
       "files": 1,
       "bytes": 8566,
-      "version": "2026.10.2",
+      "version": "2026.10.3",
       "status": "builtin"
     },
     {
@@ -159,9 +179,9 @@
       "title": "Правила проверки (данные)",
       "dir": "rules",
       "license": "проект «Вычитка»",
-      "files": 9,
-      "bytes": 128964,
-      "version": "2026.10.2",
+      "files": 10,
+      "bytes": 203884,
+      "version": "2026.10.3",
       "status": "builtin"
     },
     {
@@ -169,11 +189,22 @@
       "title": "Правила орфографии и пунктуации (1956)",
       "dir": "reference",
       "license": "официальный нормативный документ · публикация therules.ru",
-      "files": 1,
-      "bytes": 428514,
-      "version": "2026.10.2",
+      "files": 2,
+      "bytes": 484315,
+      "version": "2026.10.3",
+      "status": "builtin"
+    },
+    {
+      "id": "dal",
+      "title": "Толковый словарь Даля (2-е издание)",
+      "dir": "dal",
+      "license": "текст — общественное достояние · оцифровка Викитеки — CC BY-SA 4.0",
+      "files": 2,
+      "bytes": 9869982,
+      "version": "2026.10.3",
       "status": "builtin"
     }
   ],
-  "totalBytes": 12747523
+  "totalBytes": 22752886,
+  "minApp": "0.2.0"
 }

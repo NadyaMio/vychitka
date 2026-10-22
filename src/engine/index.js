@@ -71,6 +71,8 @@ function loadRules(basesDir) {
   const yo = read('yo.json');
   const grammarData = read('grammar.json');
   const passive = read('passive.json');
+  const punctExtraFile = path.join(dir, 'punct-extra.json');
+  const punctExtra = fs.existsSync(punctExtraFile) ? punctuation.compileExtra(loadJson(punctExtraFile)) : null; // checks from the punctuation manual
 
   const impfToPerf = new Map();
   for (const [perf, impf] of Object.entries(nominal.verbs)) if (impf) impfToPerf.set(impf, perf);
@@ -85,6 +87,7 @@ function loadRules(basesDir) {
     yo,
     grammar: grammarData,
     passive,
+    punctExtra,
     introCompiled: punctuation.compileIntro(intro.items),
     conjCompiled: punctuation.compileConj(conj),
     phrasesCompiled: spelling.compilePhrases(phrases.items),
