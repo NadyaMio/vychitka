@@ -56,3 +56,16 @@ test('НКРЯ: подключение токена, частотность, п�
     assert.strictEqual(nk.disconnect().connected, false);
   } finally { srv.close(); }
 });
+
+test('НКРЯ: подсчёт запятой между словами в выборке корпуса', () => {
+  const { countGap } = require('../../src/main/nkrya');
+  const snip = (withComma) => ({ sequences: [{ words: [
+    { text: 'и', displayParams: { hit: true } }, { text: ' ' }, { text: 'то', displayParams: { hit: true } }, { text: withComma ? ', ' : ' ' },
+    { text: 'и', displayParams: { hit: true } }, { text: ' ' }, { text: 'другое', displayParams: { hit: true } }, { text: '.' },
+  ] }] });
+  const data = { groups: [{ docs: [{ info: { title: 'Т' }, snippetGroups: [{ snippets: [snip(false), snip(false), snip(true)] }] }] }] };
+  const r = countGap(data, 4, 1);
+  assert.deepStrictEqual([r.sample, r.comma, r.plain], [3, 1, 2]);
+  assert.strictEqual(r.examples.comma.text, 'и то, и другое.');
+  assert.strictEqual(r.examples.plain.text, 'и то и другое.');
+});

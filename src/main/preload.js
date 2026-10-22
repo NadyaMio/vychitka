@@ -28,6 +28,7 @@ contextBridge.exposeInMainWorld('api', {
   nkryaConnect: token => ipcRenderer.invoke('nkrya:connect', token),
   nkryaDisconnect: () => ipcRenderer.invoke('nkrya:disconnect'),
   nkryaPortrait: lemma => ipcRenderer.invoke('nkrya:portrait', lemma),
+  nkryaPunct: (words, gap) => ipcRenderer.invoke('nkrya:punct', words, gap),
   appUpdateCheck: () => ipcRenderer.invoke('appupdate:check'),
   appUpdateInstall: () => ipcRenderer.invoke('appupdate:install'),
   closeConfirmed: () => ipcRenderer.invoke('app:close-confirmed'),

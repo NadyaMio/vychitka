@@ -65,6 +65,23 @@ class Nkrya {
     return { connected: !!this._token(), checkedAt: v.checkedAt || null, user: v.user || null };
   }
 
+  async _post(route, token, body, retried = false) {
+    let res;
+    try {
+      res = await fetch(`${API}${route}`, { method: 'POST', body: JSON.stringify(body), headers: { Authorization: `Bearer ${token}`, Accept: 'application/json', 'Content-Type': 'application/json', 'User-Agent': 'Vychitka' }, signal: AbortSignal.timeout(20000) });
+    } catch (e) {
+      throw new NkryaError('Нет связи с НКРЯ. Проверьте интернет — остальная проверка работает без него.');
+    }
+    if (res.status === 401 || res.status === 403) throw new NkryaError('НКРЯ не принял токен. Создайте новый в личном кабинете ruscorpora.ru и подключите снова.');
+    if (res.status === 429) {
+      const wait = Number(res.headers.get('retry-after'));
+      if (!retried && wait > 0 && wait <= 10) { await new Promise(r => setTimeout(r, wait * 1000)); return this._post(route, token, body, true); }
+      throw new NkryaError('НКРЯ просит подождать: слишком много запросов. Попробуйте через минуту.');
+    }
+    if (!res.ok) throw new NkryaError(`НКРЯ ответил ошибкой ${res.status}.`);
+    return res.json();
+  }
+
   async _get(route, token, params, retried = false) {
     const url = `${API}${route}${params ? '?' + new URLSearchParams(params) : ''}`;
     let res;
@@ -127,4 +144,45 @@ class Nkrya {
   }
 }
 
-module.exports = { Nkrya, NkryaError, parseExamples, FREQ_TITLES };
+// How editors actually punctuate a word sequence: search the exact forms one after another and count,
+// in the returned sample, whether a comma stands in the gap after word `gap` (0-based).
+function countGap(data, n, gap) {
+  let total = 0, comma = 0;
+  const ex = { comma: null, plain: null };
+  for (const g of (data && data.groups) || []) for (const doc of g.docs || []) for (const sg of doc.snippetGroups || []) for (const sn of sg.snippets || []) for (const seq of sn.sequences || []) {
+    const ws = seq.words || [];
+    const hits = [];
+    ws.forEach((w, i) => { if (w.displayParams && w.displayParams.hit) hits.push(i); });
+    if (hits.length < n) continue;
+    total++;
+    const between = ws.slice(hits[gap] + 1, hits[gap + 1]).map(w => w.text || '').join('');
+    const has = between.includes(',');
+    if (has) comma++;
+    const key = has ? 'comma' : 'plain';
+    if (!ex[key]) {
+      const text = ws.map(w => w.text || '').join('').replace(/\s+/g, ' ').trim();
+      ex[key] = { text: text.length > 220 ? text.slice(0, 217) + '…' : text, title: (doc.info && doc.info.title || '').replace(/\s*\(source\/[^)]*\)/, '') };
+    }
+  }
+  return { sample: total, comma, plain: total - comma, examples: ex };
+}
+
+Nkrya.prototype.punctuation = async function punctuation(words, gap) {
+  const forms = (words || []).map(w => String(w).toLowerCase().replace(/[^а-яёa-z0-9-]/gi, '')).filter(Boolean);
+  if (forms.length < 2 || gap < 0 || gap >= forms.length - 1) throw new NkryaError('Нечего сравнивать: нужно хотя бы два слова.');
+  const key = 'p:' + forms.join(' ') + '|' + gap;
+  const hit = this.cache[key];
+  if (hit && Date.now() - hit.at < CACHE_DAYS * 864e5) return hit.data;
+  const token = this._token();
+  if (!token) throw new NkryaError('НКРЯ не подключён: добавьте токен на экране «Словари и базы».');
+  const subs = forms.map((f, k) => ({ conditionValues: [{ fieldName: 'form', text: { v: f } }, ...(k ? [{ fieldName: 'dist', intRange: { begin: 1, end: 1 } }] : [])] }));
+  const json = await this._post('/lex-gramm/concordance', token, { corpus: { type: 'MAIN' }, lexGramm: { sectionValues: [{ subsectionValues: subs }] }, params: { pageParams: { page: 0, docsPerPage: 50, snippetsPerDoc: 2 } } });
+  const c = countGap(json, forms.length, gap);
+  const data = { phrase: forms.join(' '), gap, occurrences: (json.queryStats && json.queryStats.wordUsageCount) || 0, ...c,
+    url: `https://ruscorpora.ru/search?search=${encodeURIComponent(JSON.stringify({ corpus: { type: 'MAIN' } }))}` };
+  this.cache[key] = { at: Date.now(), data };
+  try { fs.writeFileSync(this.cacheFile, JSON.stringify(this.cache)); } catch { /* optional */ }
+  return data;
+};
+
+module.exports = { Nkrya, NkryaError, parseExamples, countGap, FREQ_TITLES };

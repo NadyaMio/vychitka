@@ -80,6 +80,7 @@ document.addEventListener('click', async e => {
     const a = act && act.dataset.act;
     if (a === 'open-rule') return openRule(act.dataset.rule);
     if (a === 'open-manual') return openManualRule(act.dataset.manual);
+    if (a === 'corpus-punct') return loadCorpusPunct(i);
     if (a === 'toggle') { st(i).selected = !st(i).selected; renderPanel(); renderStatus(); if (S.mode === 'diff') renderPaper(false); return; }
     if (a === 'accept') { S.activeKey = i.key; return acceptActive(); }
     if (a === 'reject') { S.activeKey = i.key; return rejectActive(); }

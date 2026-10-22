@@ -622,11 +622,44 @@ function cardHtml(i) {
       ${active || i.confidence === 'check' ? `<div class="why">${esc(i.why || '')}</div>` : ''}
       ${active && i.source ? `<div class="src">${ic('book', 12)}${(i.ref || []).length ? `<a data-act="open-rule" data-rule="${i.ref[0]}" style="color:inherit;text-decoration:underline;text-underline-offset:2px;cursor:pointer">${esc(i.source)}</a>` : (i.manualRef || []).length ? `<a data-act="open-manual" data-manual="${esc(i.manualRef[0])}" style="color:inherit;text-decoration:underline;text-underline-offset:2px;cursor:pointer">${esc(i.source)}</a>` : esc(i.source)}</div>` : ''}
       ${active && i.category === 'spelling' && (i.alternatives || []).length ? `<div class="src">Ещё: ${i.alternatives.slice(0, 3).map(a => `<a data-act="use-alt" data-alt="${esc(a.text)}" style="color:var(--navy);font-weight:600;cursor:pointer">${shown(a.text)}</a>`).join(', ')}</div>` : ''}
+      ${active && i.category === 'punctuation' && i.after !== i.before ? corpusPunctHtml(i) : ''}
       ${active ? `<div class="acts">${fixable ? `<button class="btn sm ok" data-act="accept">${ic('check', 13, 'currentColor', 2.5)}Принять <span class="k">↵</span></button>` : ''}
         <button class="btn sm" data-act="reject">Отклонить</button>
         ${i.category === 'spelling' ? `<button class="btn sm ghost" data-act="add-word">В мой словарь</button>` : `<button class="btn sm ghost" data-act="ignore">Пропускать везде</button>`}</div>` : ''}
     </div></div>`;
 }
+// «Как пишут в корпусе»: share of the variant with a comma in a НКРЯ sample of the same word sequence.
+function punctWordsGap(i) {
+  let p = 0;
+  while (p < i.before.length && p < i.after.length && i.before[p] === i.after[p]) p++;
+  const words = i.before.split(/[\s\u00a0]+/).map(w => w.replace(/[^а-яёА-ЯЁa-zA-Z0-9-]/g, '')).filter(Boolean);
+  const left = i.before.slice(0, p).split(/[\s\u00a0]+/).filter(w => w.replace(/[^а-яёА-ЯЁa-zA-Z0-9-]/g, '')).length;
+  return { words, gap: Math.max(0, Math.min(words.length - 2, left - 1)) };
+}
+S.corpusPunct = new Map();
+function corpusPunctHtml(i) {
+  if (!(S.nkrya && S.nkrya.connected)) return '';
+  const st2 = S.corpusPunct.get(i.key);
+  if (!st2) return `<div class="src"><a data-act="corpus-punct" style="color:var(--navy);font-weight:600;cursor:pointer">${ic('search', 12)} Как пишут в корпусе</a></div>`;
+  if (st2.loading) return `<div class="src">${ic('spinner', 12)} Ищу в Национальном корпусе…</div>`;
+  if (st2.error) return `<div class="src" style="color:var(--red-ink)">${esc(st2.error)}</div>`;
+  const d = st2.data;
+  if (!d.sample) return `<div class="src">В корпусе такого сочетания не нашлось.</div>`;
+  const pc = Math.round(d.comma / d.sample * 100);
+  const ex = d.examples[i.after.includes(',') && !i.before.includes(',') ? 'comma' : 'plain'];
+  return `<div class="notice" style="margin-top:8px;display:block;background:#f4f1ea;border-color:#e2ddd2;color:var(--ink2)">
+    <b>Национальный корпус:</b> «${esc(d.phrase)}» — ${fmtNum(d.occurrences)} ${plural(d.occurrences, ['вхождение', 'вхождения', 'вхождений'])}. В выборке из ${d.sample}: с запятой ${pc}%, без запятой ${100 - pc}%.
+    ${ex ? `<div style="font-family:'PT Serif',serif;font-size:13px;margin-top:6px;color:var(--muted)">${esc(ex.text)}</div>` : ''}
+    <div style="font-size:11px;color:var(--muted3);margin-top:4px">Показывает, как пишут в изданных текстах; решение — по правилу.</div></div>`;
+}
+async function loadCorpusPunct(i) {
+  const { words, gap } = punctWordsGap(i);
+  S.corpusPunct.set(i.key, { loading: true }); renderPanel();
+  try { S.corpusPunct.set(i.key, { data: await window.api.nkryaPunct(words, gap) }); }
+  catch (e) { S.corpusPunct.set(i.key, { error: String(e.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '') }); }
+  renderPanel();
+}
+
 function staleCard(i) {
   return `<div class="card off"><div class="cb"></div><div class="cbody"><div class="ctop"><span class="pill n" style="padding:2px 7px;font-size:11px">Неактуально</span><span class="loc">Абз. ${paraNo(i.para)}</span></div>
     <div class="fix"><s>${shown(i.before)}</s><span class="ar">→</span><b>${shown(i.after)}</b></div><div class="why">Исправлено вручную — правка больше не нужна.</div></div></div>`;

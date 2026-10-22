@@ -199,6 +199,7 @@ function registerIpc() {
   ipcMain.handle('nkrya:connect', (_e, token) => nkrya.connect(token));
   ipcMain.handle('nkrya:disconnect', () => nkrya.disconnect());
   ipcMain.handle('nkrya:portrait', (_e, lemma) => nkrya.portrait(lemma));
+  ipcMain.handle('nkrya:punct', (_e, words, gap) => nkrya.punctuation(words, gap));
   ipcMain.handle('appupdate:check', () => appUpdater.check());
   ipcMain.handle('appupdate:install', () => appUpdater.install());
   ipcMain.handle('app:close-confirmed', () => { win.__allowClose = true; win.close(); });
