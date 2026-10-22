@@ -1,5 +1,6 @@
-# Тег vX.Y.Z → тесты на macOS и Windows → сборка dmg (arm64 + x64) и установщика Windows → релиз на GitHub.
-# Приложение у пользователей само находит этот релиз и обновляется.
+# Тег vX.Y.Z → тесты на macOS и Windows → сборка dmg (arm64 + x64) и установщика Windows → один релиз на GitHub.
+# Сборщики ничего не публикуют сами (параллельные загрузки создавали дубли черновиков) — файлы собирает
+# и выкладывает один последовательный шаг publish. Приложение у пользователей находит этот релиз и обновляется.
 name: release
 on:
   push:
@@ -8,20 +9,9 @@ on:
 permissions:
   contents: write
 jobs:
-  draft:
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
-    steps:
-      - uses: actions/checkout@v4
-      - env: { GH_TOKEN: '${{ secrets.GITHUB_TOKEN }}' }
-        run: |
-          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || \
-          gh release create "$GITHUB_REF_NAME" --draft --title "Вычитка ${GITHUB_REF_NAME#v}" --notes-file docs/RELEASE_NOTES.md
   build:
-    needs: draft
-    if: always() && (needs.draft.result == 'success' || needs.draft.result == 'skipped')
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         os: [macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
@@ -37,25 +27,47 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with: { name: 'e2e-${{ matrix.os }}', path: test/e2e/out/ }
-      - name: Сборка и публикация (macOS)
-        if: runner.os == 'macOS' && startsWith(github.ref, 'refs/tags/v')
-        env: { GH_TOKEN: '${{ secrets.GITHUB_TOKEN }}', CSC_IDENTITY_AUTO_DISCOVERY: 'false' }
-        run: npx electron-builder --mac --publish always
+      - name: Сборка (macOS)
+        if: runner.os == 'macOS'
+        env: { CSC_IDENTITY_AUTO_DISCOVERY: 'false' }
+        run: npx electron-builder --mac --publish never
       - name: Проверка собранного приложения (macOS)
-        if: runner.os == 'macOS' && startsWith(github.ref, 'refs/tags/v')
+        if: runner.os == 'macOS'
         run: node test/e2e/packaged.js release/mac-arm64/Vychitka.app/Contents/MacOS/Vychitka
-      - name: Сборка и публикация (Windows)
-        if: runner.os == 'Windows' && startsWith(github.ref, 'refs/tags/v')
-        env: { GH_TOKEN: '${{ secrets.GITHUB_TOKEN }}' }
-        run: npx electron-builder --win --publish always
+      - name: Сборка (Windows)
+        if: runner.os == 'Windows'
+        run: npx electron-builder --win --publish never
       - name: Проверка собранного приложения (Windows)
-        if: runner.os == 'Windows' && startsWith(github.ref, 'refs/tags/v')
+        if: runner.os == 'Windows'
         run: node test/e2e/packaged.js release/win-unpacked/Vychitka.exe
+      - name: Файлы для обновления на месте
+        shell: bash
+        run: |
+          ls -la release
+          if [ "$RUNNER_OS" = "Windows" ]; then test -f release/latest.yml; fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.os }}
+          if-no-files-found: error
+          path: |
+            release/*.dmg
+            release/*.exe
+            release/*.blockmap
+            release/latest*.yml
   publish:
     needs: build
-    runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - env: { GH_TOKEN: '${{ secrets.GITHUB_TOKEN }}' }
-        run: gh release edit "$GITHUB_REF_NAME" --draft=false --latest
+      - uses: actions/download-artifact@v4
+        with: { pattern: 'dist-*', path: dist, merge-multiple: true }
+      - name: Один релиз, файлы по очереди
+        env: { GH_TOKEN: '${{ secrets.GITHUB_TOKEN }}' }
+        run: |
+          ls -la dist
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || \
+            gh release create "$GITHUB_REF_NAME" --draft --title "Вычитка ${GITHUB_REF_NAME#v}" --notes-file docs/RELEASE_NOTES.md
+          for f in dist/*; do gh release upload "$GITHUB_REF_NAME" "$f" --clobber; done
+          gh release edit "$GITHUB_REF_NAME" --draft=false --latest
+          gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[].name'
